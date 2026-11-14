@@ -201,7 +201,7 @@ fun DetailScreen(
 
             Spacer(Modifier.height(14.dp))
             Text(
-                "Set",
+                "Kategorie",
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

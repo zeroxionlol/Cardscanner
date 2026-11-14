@@ -13,6 +13,11 @@ zeigt den aktuellen Cardmarket-Preis und speichert Foto und Karte in deiner Samm
   getrennt für Normal und Holo/Reverse.
 - **Sammlung** – Deine Fotos, Anzahl pro Karte, Gesamtwert, Suche und Sortierung.
 - **Preise aktualisieren** – Ein Button für die ganze Sammlung, einer pro Karte.
+- **Kategorien** – Eigene Kategorien (z. B. „Lenas Karten“). Oben in der Kamera wählst du per
+  Dropdown, in welche Kategorie die nächsten Scans kommen.
+- **Binder** – Binder mit eigenem Coverfoto aus der Galerie und 2 × 2, 3 × 3 oder 4 × 3 Taschen
+  pro Seite. Eine leere Tasche antippen und eine Karte aus der Sammlung einstecken; lange drücken
+  zum Verschieben, Seiten hinzufügen und entfernen.
 
 ## Woher die Preise kommen
 

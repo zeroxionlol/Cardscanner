@@ -42,9 +42,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.FlashOff
 import androidx.compose.material.icons.rounded.FlashOn
+import androidx.compose.material.icons.rounded.Layers
 import androidx.compose.material.icons.rounded.PhotoLibrary
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.Button
@@ -52,6 +55,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -94,6 +98,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.zeroxion.cardscanner.MainViewModel
 import com.zeroxion.cardscanner.ScanState
 import com.zeroxion.cardscanner.data.CardBrief
+import com.zeroxion.cardscanner.data.CardGroup
 import com.zeroxion.cardscanner.data.CardInfo
 import com.zeroxion.cardscanner.data.ScanLangs
 import com.zeroxion.cardscanner.data.VARIANT_HOLO
@@ -120,6 +125,9 @@ private fun CameraPane(vm: MainViewModel, padding: PaddingValues) {
     val context = LocalContext.current
     val density = LocalDensity.current
     val lang by vm.lang.collectAsStateWithLifecycle()
+    val groups by vm.groups.collectAsStateWithLifecycle()
+    val scanGroupId by vm.scanGroupId.collectAsStateWithLifecycle()
+    var creatingCategory by remember { mutableStateOf(false) }
     var granted by remember {
         mutableStateOf(
             ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
@@ -162,7 +170,7 @@ private fun CameraPane(vm: MainViewModel, padding: PaddingValues) {
     var busy by remember { mutableStateOf(false) }
 
     // Platz für Kopfzeile und Bedienleiste – dazwischen liegt der Rahmen, nichts verdeckt ihn.
-    val topReserved = with(density) { (padding.calculateTopPadding() + 68.dp).toPx() }
+    val topReserved = with(density) { (padding.calculateTopPadding() + 80.dp).toPx() }
     val bottomReserved = with(density) { (padding.calculateBottomPadding() + 112.dp).toPx() }
 
     fun capture() {
@@ -228,52 +236,60 @@ private fun CameraPane(vm: MainViewModel, padding: PaddingValues) {
             }
         }
 
-        // Kopfzeile
-        Row(
+        // Kopfzeile: Kategorie links, Kartensprache rechts – beides schon vor dem Foto wählbar.
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = padding.calculateTopPadding() + 8.dp, start = 16.dp, end = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column(Modifier.weight(1f)) {
-                Text("Karte scannen", style = MaterialTheme.typography.titleLarge, color = Color.White)
-                Text(
-                    "Karte füllt den Rahmen, ohne Spiegelung",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color.White.copy(alpha = 0.8f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            Box {
-                var menuOpen by remember { mutableStateOf(false) }
-                Text(
-                    text = "Karten: ${ScanLangs.byCode(lang).label} ▾",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = Color.White,
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                CategoryDropdown(
+                    groups = groups,
+                    selectedId = scanGroupId,
+                    onSelect = { vm.setScanGroup(it) },
+                    onCreate = { creatingCategory = true },
                     modifier = Modifier
-                        .clip(RoundedCornerShape(50))
-                        .background(Color.White.copy(alpha = 0.18f))
-                        .clickable { menuOpen = true }
-                        .padding(horizontal = 14.dp, vertical = 8.dp),
+                        .weight(1f, fill = false)
+                        .padding(end = 10.dp),
                 )
-                DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                    ScanLangs.all.forEach { option ->
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    "${option.label} · ${option.title}",
-                                    fontWeight = if (option.code == lang) FontWeight.Bold else FontWeight.Normal,
-                                )
-                            },
-                            onClick = {
-                                menuOpen = false
-                                vm.setLang(option.code)
-                            },
-                        )
+                Box {
+                    var menuOpen by remember { mutableStateOf(false) }
+                    CameraPill(
+                        text = "${ScanLangs.byCode(lang).label} ▾",
+                        onClick = { menuOpen = true },
+                    )
+                    DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                        ScanLangs.all.forEach { option ->
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        "${option.label} · ${option.title}",
+                                        fontWeight = if (option.code == lang) FontWeight.Bold else FontWeight.Normal,
+                                    )
+                                },
+                                onClick = {
+                                    menuOpen = false
+                                    vm.setLang(option.code)
+                                },
+                            )
+                        }
                     }
                 }
             }
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "Karte füllt den Rahmen, ohne Spiegelung",
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.White.copy(alpha = 0.8f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Center,
+            )
         }
 
         // Bedienleiste
@@ -320,6 +336,120 @@ private fun CameraPane(vm: MainViewModel, padding: PaddingValues) {
             }
         }
     }
+
+    if (creatingCategory) {
+        NameDialog(
+            title = "Neue Kategorie",
+            confirmLabel = "Anlegen",
+            onConfirm = { name ->
+                creatingCategory = false
+                vm.createGroup(name) { id -> vm.setScanGroup(id) }
+            },
+            onDismiss = { creatingCategory = false },
+        )
+    }
+}
+
+/** Halbdurchsichtiger Knopf über dem Kamerabild. */
+@Composable
+private fun CameraPill(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    leading: (@Composable () -> Unit)? = null,
+) {
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(50))
+            .background(Color.Black.copy(alpha = 0.45f))
+            .border(1.dp, Color.White.copy(alpha = 0.22f), RoundedCornerShape(50))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 9.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (leading != null) {
+            leading()
+            Spacer(Modifier.width(8.dp))
+        }
+        Text(
+            text,
+            style = MaterialTheme.typography.labelLarge,
+            color = Color.White,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+/**
+ * Auswahl, in welche Kategorie die nächsten Scans kommen – direkt in der Kamera,
+ * damit man sie vor dem Foto festlegt (bleibt für weitere Scans gewählt).
+ */
+@Composable
+private fun CategoryDropdown(
+    groups: List<CardGroup>,
+    selectedId: String?,
+    onSelect: (String?) -> Unit,
+    onCreate: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var open by remember { mutableStateOf(false) }
+    val active = groups.firstOrNull { it.id == selectedId }
+    Box(modifier) {
+        CameraPill(
+            text = "${active?.name ?: "Sammlung"} ▾",
+            onClick = { open = true },
+            leading = {
+                Icon(
+                    Icons.Rounded.Layers,
+                    contentDescription = "Kategorie",
+                    tint = if (active != null) Gold else Color.White,
+                    modifier = Modifier.size(18.dp),
+                )
+            },
+        )
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            Text(
+                "SCANS SPEICHERN IN",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+            )
+            DropdownMenuItem(
+                text = { Text("Sammlung (keine Kategorie)") },
+                leadingIcon = { CheckMark(active == null) },
+                onClick = {
+                    open = false
+                    onSelect(null)
+                },
+            )
+            groups.forEach { group ->
+                DropdownMenuItem(
+                    text = { Text(group.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    leadingIcon = { CheckMark(active?.id == group.id) },
+                    onClick = {
+                        open = false
+                        onSelect(group.id)
+                    },
+                )
+            }
+            HorizontalDivider()
+            DropdownMenuItem(
+                text = { Text("Neue Kategorie …") },
+                leadingIcon = { Icon(Icons.Rounded.Add, contentDescription = null) },
+                onClick = {
+                    open = false
+                    onCreate()
+                },
+            )
+        }
+    }
+}
+
+@Composable
+private fun CheckMark(visible: Boolean) {
+    if (visible) Icon(Icons.Rounded.Check, contentDescription = "Ausgewählt", tint = MaterialTheme.colorScheme.primary)
+    else Spacer(Modifier.size(24.dp))
 }
 
 @Composable
@@ -606,7 +736,7 @@ private fun ResultPane(vm: MainViewModel, state: ScanState.Result, padding: Padd
             if (selected != null) {
                 item {
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text("In welches Set?", style = MaterialTheme.typography.titleSmall)
+                        Text("In welche Kategorie?", style = MaterialTheme.typography.titleSmall)
                         GroupPicker(
                             groups = groups,
                             selectedId = scanGroupId,

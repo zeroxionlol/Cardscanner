@@ -24,10 +24,171 @@ class CollectionStore(context: Context) {
     private val _groups = MutableStateFlow<List<CardGroup>>(emptyList())
     val groups: StateFlow<List<CardGroup>> = _groups
 
+    /** Binder (Sammelalben) mit Coverfoto und belegten Taschen. */
+    private val binderFile = File(context.filesDir, "binders.json")
+    private val _binders = MutableStateFlow<List<Binder>>(emptyList())
+    val binders: StateFlow<List<Binder>> = _binders
+
     suspend fun load() = withContext(Dispatchers.IO) {
         mutex.withLock {
             _groups.value = readGroups()
-            _items.value = read()
+            val items = read()
+            _items.value = items
+            // Taschen, deren Karte es nicht mehr gibt, werden wieder frei.
+            val known = items.mapTo(HashSet()) { it.uid }
+            _binders.value = readBinders().map { b -> b.copy(slots = b.slots.filterValues { it in known }) }
+        }
+    }
+
+    // ---------- Binder ----------
+
+    suspend fun addBinder(
+        name: String,
+        coverPath: String?,
+        layout: BinderLayout,
+        now: Long = System.currentTimeMillis(),
+    ): Binder = withContext(Dispatchers.IO) {
+        mutex.withLock {
+            val binder = Binder(
+                id = UUID.randomUUID().toString(),
+                name = name.trim(),
+                coverPath = coverPath,
+                layout = layout,
+                pageCount = 1,
+                slots = emptyMap(),
+                createdAt = now,
+            )
+            val next = _binders.value + binder
+            _binders.value = next
+            writeBinders(next)
+            binder
+        }
+    }
+
+    suspend fun renameBinder(id: String, name: String) = mutateBinder(id) { it.copy(name = name.trim()) }
+
+    /** Neues Coverfoto (null = keines). Das alte Foto wird gelöscht. */
+    suspend fun setBinderCover(id: String, coverPath: String?) = mutateBinder(id) { b ->
+        if (b.coverPath != null && b.coverPath != coverPath) runCatching { File(b.coverPath).delete() }
+        b.copy(coverPath = coverPath)
+    }
+
+    /**
+     * Andere Seitenaufteilung. Die Karten behalten ihre Reihenfolge; es gibt so viele Seiten,
+     * dass alle hineinpassen.
+     */
+    suspend fun setBinderLayout(id: String, layout: BinderLayout) = mutateBinder(id) { b ->
+        val last = b.slots.keys.maxOrNull() ?: -1
+        val needed = (last + layout.pageSize) / layout.pageSize
+        b.copy(layout = layout, pageCount = maxOf(1, b.pageCount, needed))
+    }
+
+    suspend fun addBinderPage(id: String) = mutateBinder(id) { it.copy(pageCount = it.pageCount + 1) }
+
+    /** Entfernt eine Seite samt ihrer Taschen; die folgenden Seiten rücken nach. */
+    suspend fun removeBinderPage(id: String, page: Int) = mutateBinder(id) { b ->
+        if (b.pageCount <= 1 || page !in 0 until b.pageCount) return@mutateBinder b
+        val size = b.layout.pageSize
+        val first = page * size
+        val slots = b.slots.mapNotNull { (index, uid) ->
+            when {
+                index < first -> index to uid
+                index < first + size -> null
+                else -> (index - size) to uid
+            }
+        }.toMap()
+        b.copy(pageCount = b.pageCount - 1, slots = slots)
+    }
+
+    /** Karte in eine Tasche stecken (uid = null leert die Tasche). */
+    suspend fun setBinderSlot(id: String, index: Int, uid: String?) = mutateBinder(id) { b ->
+        if (index < 0) return@mutateBinder b
+        val slots = if (uid == null) b.slots - index else b.slots + (index to uid)
+        val needed = index / b.layout.pageSize + 1
+        b.copy(slots = slots, pageCount = maxOf(b.pageCount, needed))
+    }
+
+    /** Zwei Taschen tauschen (auch mit einer leeren). */
+    suspend fun swapBinderSlots(id: String, from: Int, to: Int) = mutateBinder(id) { b ->
+        if (from == to || from < 0 || to < 0) return@mutateBinder b
+        val slots = b.slots.toMutableMap()
+        val a = slots.remove(from)
+        val c = slots.remove(to)
+        if (a != null) slots[to] = a
+        if (c != null) slots[from] = c
+        b.copy(slots = slots)
+    }
+
+    /** Löscht einen Binder samt Coverfoto. Die Karten bleiben in der Sammlung. */
+    suspend fun removeBinder(id: String) = withContext(Dispatchers.IO) {
+        mutex.withLock {
+            _binders.value.firstOrNull { it.id == id }?.coverPath?.let { runCatching { File(it).delete() } }
+            val next = _binders.value.filterNot { it.id == id }
+            _binders.value = next
+            writeBinders(next)
+        }
+    }
+
+    private suspend fun mutateBinder(id: String, change: (Binder) -> Binder) = withContext(Dispatchers.IO) {
+        mutex.withLock {
+            val next = _binders.value.map { if (it.id == id) change(it) else it }
+            _binders.value = next
+            writeBinders(next)
+        }
+    }
+
+    private fun readBinders(): List<Binder> {
+        if (!binderFile.exists()) return emptyList()
+        return try {
+            val array = JSONArray(binderFile.readText())
+            (0 until array.length()).mapNotNull { i ->
+                val o = array.optJSONObject(i) ?: return@mapNotNull null
+                val id = o.str("id") ?: return@mapNotNull null
+                val slotsJson = o.optJSONObject("slots")
+                val slots = HashMap<Int, String>()
+                slotsJson?.keys()?.forEach { key ->
+                    val index = key.toIntOrNull() ?: return@forEach
+                    val uid = slotsJson.optString(key).takeIf { it.isNotEmpty() } ?: return@forEach
+                    if (index >= 0) slots[index] = uid
+                }
+                val layout = BinderLayout.of(o.optInt("columns", 3), o.optInt("rows", 3))
+                val last = slots.keys.maxOrNull() ?: -1
+                Binder(
+                    id = id,
+                    name = o.str("name") ?: "Binder",
+                    coverPath = o.str("coverPath"),
+                    layout = layout,
+                    pageCount = maxOf(1, o.optInt("pages", 1), (last + layout.pageSize) / layout.pageSize),
+                    slots = slots,
+                    createdAt = o.optLong("createdAt", 0L),
+                )
+            }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    private fun writeBinders(binders: List<Binder>) {
+        val array = JSONArray()
+        binders.forEach { b ->
+            val slots = JSONObject()
+            b.slots.forEach { (index, uid) -> slots.put(index.toString(), uid) }
+            val o = JSONObject()
+                .put("id", b.id)
+                .put("name", b.name)
+                .put("columns", b.layout.columns)
+                .put("rows", b.layout.rows)
+                .put("pages", b.pageCount)
+                .put("createdAt", b.createdAt)
+                .put("slots", slots)
+            b.coverPath?.let { o.put("coverPath", it) }
+            array.put(o)
+        }
+        val tmp = File(binderFile.parentFile, binderFile.name + ".tmp")
+        tmp.writeText(array.toString())
+        if (!tmp.renameTo(binderFile)) {
+            binderFile.writeText(array.toString())
+            tmp.delete()
         }
     }
 
@@ -90,9 +251,20 @@ class CollectionStore(context: Context) {
 
     suspend fun add(item: CollectionItem) = mutate { listOf(item) + it }
 
-    suspend fun remove(uid: String) = mutate { list ->
-        list.firstOrNull { it.uid == uid }?.photoPath?.let { runCatching { File(it).delete() } }
-        list.filterNot { it.uid == uid }
+    suspend fun remove(uid: String) {
+        mutate { list ->
+            list.firstOrNull { it.uid == uid }?.photoPath?.let { runCatching { File(it).delete() } }
+            list.filterNot { it.uid == uid }
+        }
+        // Die Tasche im Binder wird wieder frei.
+        withContext(Dispatchers.IO) {
+            mutex.withLock {
+                if (_binders.value.none { b -> uid in b.slots.values }) return@withLock
+                val next = _binders.value.map { b -> b.copy(slots = b.slots.filterValues { it != uid }) }
+                _binders.value = next
+                writeBinders(next)
+            }
+        }
     }
 
     suspend fun update(uid: String, change: (CollectionItem) -> CollectionItem) = mutate { list ->

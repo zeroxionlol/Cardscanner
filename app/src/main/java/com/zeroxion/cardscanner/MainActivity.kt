@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.AutoStories
 import androidx.compose.material.icons.rounded.PhotoCamera
 import androidx.compose.material.icons.rounded.Style
 import androidx.compose.material3.Icon
@@ -33,6 +34,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.zeroxion.cardscanner.ui.BinderListScreen
+import com.zeroxion.cardscanner.ui.BinderScreen
 import com.zeroxion.cardscanner.ui.CardscannerTheme
 import com.zeroxion.cardscanner.ui.CollectionScreen
 import com.zeroxion.cardscanner.ui.DetailScreen
@@ -54,7 +57,8 @@ class MainActivity : ComponentActivity() {
 }
 
 private const val TAB_COLLECTION = 0
-private const val TAB_SCAN = 1
+private const val TAB_BINDERS = 1
+private const val TAB_SCAN = 2
 
 @Composable
 fun CardscannerApp(vm: MainViewModel = viewModel()) {
@@ -62,7 +66,11 @@ fun CardscannerApp(vm: MainViewModel = viewModel()) {
     var detailUid by rememberSaveable { mutableStateOf<String?>(null) }
     // Reihenfolge der Karten, wie sie beim Öffnen in der Sammlung standen – darin wird gewischt.
     var detailOrder by rememberSaveable { mutableStateOf(ArrayList<String>()) }
+    // Geöffneter Binder im Binder-Tab.
+    var binderId by rememberSaveable { mutableStateOf<String?>(null) }
     val items by vm.items.collectAsStateWithLifecycle()
+    val binders by vm.binders.collectAsStateWithLifecycle()
+    val openBinder = binderId?.let { id -> binders.firstOrNull { it.id == id } }
     val scan by vm.scan.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
 
@@ -79,6 +87,9 @@ fun CardscannerApp(vm: MainViewModel = viewModel()) {
     BackHandler(enabled = detailItem != null) { detailUid = null }
     BackHandler(enabled = detailItem == null && tab == TAB_SCAN) {
         if (scan is ScanState.Result) vm.discardScan() else tab = TAB_COLLECTION
+    }
+    BackHandler(enabled = detailItem == null && tab == TAB_BINDERS) {
+        if (openBinder != null) binderId = null else tab = TAB_COLLECTION
     }
 
     Scaffold(
@@ -97,6 +108,17 @@ fun CardscannerApp(vm: MainViewModel = viewModel()) {
                         onClick = { tab = TAB_COLLECTION },
                         icon = { Icon(Icons.Rounded.Style, contentDescription = null) },
                         label = { Text("Sammlung") },
+                        colors = colors,
+                    )
+                    NavigationBarItem(
+                        selected = tab == TAB_BINDERS,
+                        onClick = {
+                            // Erneutes Tippen auf "Binder" führt zurück zur Übersicht.
+                            if (tab == TAB_BINDERS) binderId = null
+                            tab = TAB_BINDERS
+                        },
+                        icon = { Icon(Icons.Rounded.AutoStories, contentDescription = null) },
+                        label = { Text("Binder") },
                         colors = colors,
                     )
                     NavigationBarItem(
@@ -132,6 +154,23 @@ fun CardscannerApp(vm: MainViewModel = viewModel()) {
                         }
                     }
                 }
+
+                tab == TAB_BINDERS && openBinder != null -> BinderScreen(
+                    vm = vm,
+                    binder = openBinder,
+                    padding = padding,
+                    onBack = { binderId = null },
+                    onOpenCard = { uid, order ->
+                        detailOrder = ArrayList(order)
+                        detailUid = uid
+                    },
+                )
+
+                tab == TAB_BINDERS -> BinderListScreen(
+                    vm = vm,
+                    padding = padding,
+                    onOpen = { binderId = it },
+                )
 
                 tab == TAB_SCAN -> ScanScreen(
                     vm = vm,

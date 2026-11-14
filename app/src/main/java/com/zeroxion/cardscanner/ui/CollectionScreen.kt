@@ -157,7 +157,7 @@ fun CollectionScreen(
             }
         }
 
-        // Eigene Sets als Filter.
+        // Eigene Kategorien als Filter.
         item(span = { GridItemSpan(maxLineSpan) }) {
             LazyRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -180,14 +180,14 @@ fun CollectionScreen(
                 if (activeGroup != null) {
                     item(key = "rename") {
                         IconButton(onClick = { renaming = true }) {
-                            Icon(Icons.Rounded.Edit, contentDescription = "Set umbenennen")
+                            Icon(Icons.Rounded.Edit, contentDescription = "Kategorie umbenennen")
                         }
                     }
                     item(key = "delete") {
                         IconButton(onClick = { deleting = true }) {
                             Icon(
                                 Icons.Rounded.Delete,
-                                contentDescription = "Set löschen",
+                                contentDescription = "Kategorie löschen",
                                 tint = MaterialTheme.colorScheme.error,
                             )
                         }
@@ -207,8 +207,8 @@ fun CollectionScreen(
                         text = when {
                             query.isNotBlank() -> "Keine Karte passt zu „${query.trim()}“."
                             activeGroup != null ->
-                                "In „${activeGroup.name}“ sind noch keine Karten. Wähle das Set beim Scannen aus " +
-                                    "oder öffne eine Karte und tippe unter „Set“ darauf."
+                                "In „${activeGroup.name}“ sind noch keine Karten. Wähle die Kategorie beim Scannen oben " +
+                                    "aus oder öffne eine Karte und tippe unter „Kategorie“ darauf."
                             else -> "Keine Karten."
                         },
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -225,7 +225,7 @@ fun CollectionScreen(
 
     if (creating) {
         NameDialog(
-            title = "Neues Set",
+            title = "Neue Kategorie",
             confirmLabel = "Anlegen",
             onConfirm = { name ->
                 creating = false
@@ -236,7 +236,7 @@ fun CollectionScreen(
     }
     if (renaming && activeGroup != null) {
         NameDialog(
-            title = "Set umbenennen",
+            title = "Kategorie umbenennen",
             confirmLabel = "Speichern",
             initial = activeGroup.name,
             onConfirm = { name ->
@@ -249,8 +249,8 @@ fun CollectionScreen(
     if (deleting && activeGroup != null) {
         AlertDialog(
             onDismissRequest = { deleting = false },
-            title = { Text("Set „${activeGroup.name}“ löschen?") },
-            text = { Text("Die Karten bleiben in deiner Sammlung, sie gehören dann nur zu keinem Set mehr.") },
+            title = { Text("Kategorie „${activeGroup.name}“ löschen?") },
+            text = { Text("Die Karten bleiben in deiner Sammlung, sie gehören dann nur zu keiner Kategorie mehr.") },
             confirmButton = {
                 TextButton(onClick = {
                     deleting = false

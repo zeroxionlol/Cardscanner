@@ -30,7 +30,7 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import com.zeroxion.cardscanner.data.CardGroup
 
-/** Dialog zum Benennen eines eigenen Sets. */
+/** Dialog zum Benennen einer Kategorie oder eines Binders. */
 @Composable
 fun NameDialog(
     title: String,
@@ -38,6 +38,7 @@ fun NameDialog(
     initial: String = "",
     onConfirm: (String) -> Unit,
     onDismiss: () -> Unit,
+    placeholder: String = "z. B. Lenas Karten",
 ) {
     var text by remember { mutableStateOf(initial) }
     val valid = text.trim().isNotEmpty()
@@ -50,7 +51,7 @@ fun NameDialog(
                 onValueChange = { if (it.length <= 40) text = it },
                 singleLine = true,
                 shape = RoundedCornerShape(16.dp),
-                placeholder = { Text("z. B. Lenas Karten") },
+                placeholder = { Text(placeholder) },
                 keyboardOptions = KeyboardOptions(
                     capitalization = KeyboardCapitalization.Sentences,
                     imeAction = ImeAction.Done,
@@ -85,15 +86,15 @@ fun SetChip(label: String, selected: Boolean, onClick: () -> Unit) {
 fun NewSetChip(onClick: () -> Unit) {
     AssistChip(
         onClick = onClick,
-        label = { Text("Neues Set") },
+        label = { Text("Neue Kategorie") },
         leadingIcon = { Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp)) },
         shape = RoundedCornerShape(50),
     )
 }
 
 /**
- * Auswahl, in welchem eigenen Set eine Karte liegt: "Kein Set", die vorhandenen Sets
- * und "Neues Set" (legt eines an und wählt es gleich aus).
+ * Auswahl, in welcher eigenen Kategorie eine Karte liegt: "Keine Kategorie", die vorhandenen
+ * und "Neue Kategorie" (legt eine an und wählt sie gleich aus).
  */
 @Composable
 fun GroupPicker(
@@ -112,7 +113,7 @@ fun GroupPicker(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         item(key = "none") {
-            SetChip("Kein Set", selected = active == null, onClick = { onSelect(null) })
+            SetChip("Keine Kategorie", selected = active == null, onClick = { onSelect(null) })
         }
         items(groups, key = { it.id }) { group ->
             SetChip(group.name, selected = active?.id == group.id, onClick = { onSelect(group.id) })
@@ -124,7 +125,7 @@ fun GroupPicker(
 
     if (creating) {
         NameDialog(
-            title = "Neues Set",
+            title = "Neue Kategorie",
             confirmLabel = "Anlegen",
             onConfirm = {
                 creating = false

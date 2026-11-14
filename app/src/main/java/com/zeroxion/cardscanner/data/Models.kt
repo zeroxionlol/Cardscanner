@@ -89,3 +89,41 @@ data class CollectionItem(
     val unitPrice: Double? get() = card.prices(variant)?.headline
     val totalPrice: Double get() = (unitPrice ?: 0.0) * quantity
 }
+
+/** Seitenaufteilung eines Binders, z. B. 3 × 3 Taschen pro Seite. */
+data class BinderLayout(val columns: Int, val rows: Int) {
+    val pageSize: Int get() = columns * rows
+    val label: String get() = "$columns × $rows"
+
+    companion object {
+        val all = listOf(BinderLayout(2, 2), BinderLayout(3, 3), BinderLayout(4, 3))
+        val default = BinderLayout(3, 3)
+
+        fun of(columns: Int, rows: Int): BinderLayout =
+            all.firstOrNull { it.columns == columns && it.rows == rows } ?: default
+    }
+}
+
+/**
+ * Ein Binder (Sammelalbum) mit Seiten voller Taschen.
+ *
+ * @param slots Platz-Nummer (über alle Seiten fortlaufend, ab 0) → uid der Karte aus der Sammlung
+ * @param coverPath eigenes Coverfoto im App-Speicher (oder keines)
+ */
+data class Binder(
+    val id: String,
+    val name: String,
+    val coverPath: String?,
+    val layout: BinderLayout,
+    val pageCount: Int,
+    val slots: Map<Int, String>,
+    val createdAt: Long,
+) {
+    val capacity: Int get() = layout.pageSize * pageCount
+    val filled: Int get() = slots.size
+
+    /** Karten in der Reihenfolge, in der sie im Binder stecken. */
+    val orderedUids: List<String> get() = slots.toSortedMap().values.toList()
+
+    fun page(index: Int): Int = index / layout.pageSize
+}

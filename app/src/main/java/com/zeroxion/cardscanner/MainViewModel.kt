@@ -5,6 +5,8 @@ import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.zeroxion.cardscanner.data.Binder
+import com.zeroxion.cardscanner.data.BinderLayout
 import com.zeroxion.cardscanner.data.CardBrief
 import com.zeroxion.cardscanner.data.CardGroup
 import com.zeroxion.cardscanner.data.CardInfo
@@ -78,18 +80,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 8)
     val messages: SharedFlow<String> = _messages
 
-    /** Eigene Sets des Nutzers. */
+    /** Eigene Kategorien des Nutzers. */
     val groups: StateFlow<List<CardGroup>> = store.groups
 
     private val _scanGroupId = MutableStateFlow(prefs.getString("scanGroup", null))
-    /** Set, in das neu gescannte Karten gelegt werden (bleibt für die nächsten Scans gewählt). */
+    /** Kategorie, in die neu gescannte Karten gelegt werden (bleibt für die nächsten Scans gewählt). */
     val scanGroupId: StateFlow<String?> = _scanGroupId
 
     init {
         viewModelScope.launch { store.load() }
     }
 
-    // ---------- Eigene Sets ----------
+    // ---------- Eigene Kategorien ----------
 
     fun setScanGroup(id: String?) {
         _scanGroupId.value = id
@@ -116,9 +118,70 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Karte einem Set zuordnen (null = kein Set). */
+    /** Karte einer Kategorie zuordnen (null = keine). */
     fun setGroup(uid: String, groupId: String?) {
         viewModelScope.launch { store.update(uid) { it.copy(groupId = groupId) } }
+    }
+
+    // ---------- Binder ----------
+
+    val binders: StateFlow<List<Binder>> = store.binders
+
+    /** Coverfoto aus der Galerie in den App-Speicher kopieren (verkleinert). */
+    private suspend fun importCover(uri: Uri): String? {
+        val app = getApplication<Application>()
+        return runCatching {
+            withContext(Dispatchers.IO) {
+                ImageUtils.importImage(File(app.filesDir, "covers"), maxDim = 1400) {
+                    if (uri.scheme == "file") uri.path?.let { java.io.FileInputStream(it) }
+                    else app.contentResolver.openInputStream(uri)
+                }.absolutePath
+            }
+        }.getOrElse {
+            notify("Das Coverfoto konnte nicht geladen werden.")
+            null
+        }
+    }
+
+    fun createBinder(name: String, layout: BinderLayout, cover: Uri?, onCreated: (String) -> Unit = {}) {
+        if (name.isBlank()) return
+        viewModelScope.launch {
+            val coverPath = cover?.let { importCover(it) }
+            val binder = store.addBinder(name, coverPath, layout)
+            onCreated(binder.id)
+        }
+    }
+
+    /** Name, Aufteilung und Cover ändern. [cover]: neues Foto; [removeCover]: Cover entfernen. */
+    fun editBinder(id: String, name: String, layout: BinderLayout, cover: Uri?, removeCover: Boolean) {
+        viewModelScope.launch {
+            if (name.isNotBlank()) store.renameBinder(id, name)
+            store.setBinderLayout(id, layout)
+            when {
+                cover != null -> importCover(cover)?.let { store.setBinderCover(id, it) }
+                removeCover -> store.setBinderCover(id, null)
+            }
+        }
+    }
+
+    fun deleteBinder(id: String) {
+        viewModelScope.launch { store.removeBinder(id) }
+    }
+
+    fun addBinderPage(id: String) {
+        viewModelScope.launch { store.addBinderPage(id) }
+    }
+
+    fun removeBinderPage(id: String, page: Int) {
+        viewModelScope.launch { store.removeBinderPage(id, page) }
+    }
+
+    fun setBinderSlot(id: String, index: Int, uid: String?) {
+        viewModelScope.launch { store.setBinderSlot(id, index, uid) }
+    }
+
+    fun swapBinderSlots(id: String, from: Int, to: Int) {
+        viewModelScope.launch { store.swapBinderSlots(id, from, to) }
     }
 
     fun notify(text: String) {
