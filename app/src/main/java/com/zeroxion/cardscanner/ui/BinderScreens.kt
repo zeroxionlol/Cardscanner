@@ -48,7 +48,7 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.FirstPage
-import androidx.compose.material.icons.rounded.LastPage
+import androidx.compose.material.icons.automirrored.rounded.LastPage
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.OpenWith
 import androidx.compose.material.icons.rounded.RemoveCircleOutline
@@ -677,7 +677,7 @@ fun BinderScreen(
                 Icon(Icons.Rounded.ChevronRight, contentDescription = "Nächste Seite")
             }
             IconButton(onClick = { scope.launch { pager.animateScrollToPage(last) } }, enabled = current < last) {
-                Icon(Icons.Rounded.LastPage, contentDescription = "Letzte Seite")
+                Icon(Icons.AutoMirrored.Rounded.LastPage, contentDescription = "Letzte Seite")
             }
             IconButton(onClick = {
                 scrollToLast = true
