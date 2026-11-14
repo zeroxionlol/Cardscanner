@@ -186,8 +186,7 @@ private fun EmptyBinders(onCreate: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(28.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .glass(RoundedCornerShape(28.dp))
             .padding(horizontal = 24.dp, vertical = 36.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
@@ -195,13 +194,13 @@ private fun EmptyBinders(onCreate: () -> Unit) {
             modifier = Modifier
                 .size(64.dp)
                 .clip(RoundedCornerShape(20.dp))
-                .background(MaterialTheme.colorScheme.secondaryContainer),
+                .background(typeBrushFor("water-binder")),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
                 Icons.Rounded.AutoStories,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.secondary,
+                tint = Color.White,
                 modifier = Modifier.size(30.dp),
             )
         }
@@ -233,7 +232,7 @@ private fun BinderCover(
         binder.coverPath?.let { File(it) }?.takeIf { it.exists() }
     }
     val model = override ?: coverFile
-    Box(modifier.background(HeroBrush), contentAlignment = Alignment.Center) {
+    Box(modifier.background(typeBrushFor(binder.id)), contentAlignment = Alignment.Center) {
         if (model != null) {
             CardImage(model = model, contentScale = ContentScale.Crop, modifier = Modifier.matchParentSize())
         } else {
@@ -290,6 +289,7 @@ private fun BinderTile(binder: Binder, byUid: Map<String, CollectionItem>, onCli
             .fillMaxWidth()
             .aspectRatio(0.74f)
             .clip(RoundedCornerShape(22.dp))
+            .border(1.dp, GlassBorder, RoundedCornerShape(22.dp))
             .clickable(onClick = onClick),
     ) {
         BinderCover(binder = binder, byUid = byUid, modifier = Modifier.matchParentSize())
@@ -601,8 +601,7 @@ fun BinderScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 6.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(MaterialTheme.colorScheme.primaryContainer)
+                    .glass(RoundedCornerShape(16.dp), tint = Electric, strength = 1.8f)
                     .padding(start = 14.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -790,8 +789,7 @@ private fun BinderPage(
     val rows = binder.layout.rows
     BoxWithConstraints(
         modifier = modifier
-            .clip(RoundedCornerShape(26.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .glass(RoundedCornerShape(26.dp))
             .padding(12.dp),
         contentAlignment = Alignment.Center,
     ) {
@@ -848,7 +846,7 @@ private fun BinderSlot(
                 Box(
                     Modifier
                         .matchParentSize()
-                        .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.6f))
+                        .background(Color.White.copy(alpha = 0.05f))
                         .drawBehind {
                             val stroke = 1.5.dp.toPx()
                             drawRoundRect(
@@ -996,6 +994,7 @@ private fun CardPickerSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        scrimColor = Color.Black.copy(alpha = 0.55f),
     ) {
         Column(
             Modifier
@@ -1012,6 +1011,7 @@ private fun CardPickerSheet(
                 singleLine = true,
                 shape = RoundedCornerShape(18.dp),
                 placeholder = { Text("Sammlung durchsuchen") },
+                colors = glassFieldColors(),
                 leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
                 trailingIcon = {
                     if (query.isNotEmpty()) {
@@ -1064,8 +1064,7 @@ private fun PickerTile(item: CollectionItem, inBinder: Boolean, onClick: () -> U
     val photo = remember(item.photoPath) { item.photoPath?.let { File(it) }?.takeIf { it.exists() } }
     Column(
         modifier = Modifier
-            .clip(RoundedCornerShape(14.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .glass(RoundedCornerShape(14.dp))
             .clickable(onClick = onClick)
             .padding(6.dp),
     ) {

@@ -1,6 +1,7 @@
 package com.zeroxion.cardscanner.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -276,6 +277,7 @@ private fun SearchField(query: String, onChange: (String) -> Unit) {
         singleLine = true,
         shape = RoundedCornerShape(18.dp),
         placeholder = { Text("Sammlung durchsuchen") },
+        colors = glassFieldColors(),
         leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
         trailingIcon = {
             if (query.isNotEmpty()) {
@@ -313,8 +315,15 @@ private fun SortChip(label: String, selected: Boolean, onClick: () -> Unit) {
         label = { Text(label) },
         shape = RoundedCornerShape(50),
         colors = FilterChipDefaults.filterChipColors(
-            selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
-            selectedLabelColor = MaterialTheme.colorScheme.onSecondaryContainer,
+            containerColor = Color.White.copy(alpha = 0.05f),
+            selectedContainerColor = Water.copy(alpha = 0.28f),
+            selectedLabelColor = Color.White,
+        ),
+        border = FilterChipDefaults.filterChipBorder(
+            enabled = true,
+            selected = selected,
+            borderColor = Color.White.copy(alpha = 0.14f),
+            selectedBorderColor = Water.copy(alpha = 0.8f),
         ),
     )
 }
@@ -336,9 +345,11 @@ private fun ValueHero(
 
     Row(
         modifier = modifier
-            .clip(RoundedCornerShape(24.dp))
+            .clip(RoundedCornerShape(26.dp))
             .background(HeroBrush)
-            .padding(start = 18.dp, end = 12.dp, top = 12.dp, bottom = 12.dp),
+            .holoShimmer()
+            .border(1.dp, GlassBorder, RoundedCornerShape(26.dp))
+            .padding(start = 18.dp, end = 12.dp, top = 14.dp, bottom = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
@@ -409,8 +420,7 @@ private fun EmptyState(onScan: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(28.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .glass(RoundedCornerShape(28.dp))
             .padding(horizontal = 24.dp, vertical = 36.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
@@ -418,13 +428,13 @@ private fun EmptyState(onScan: () -> Unit) {
             modifier = Modifier
                 .size(64.dp)
                 .clip(RoundedCornerShape(20.dp))
-                .background(MaterialTheme.colorScheme.primaryContainer),
+                .background(typeBrushFor("electric-start")),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
                 Icons.Rounded.PhotoCamera,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
+                tint = Color.White,
                 modifier = Modifier.size(30.dp),
             )
         }
@@ -449,8 +459,7 @@ private fun CardTile(item: CollectionItem, onClick: () -> Unit) {
     val photo = item.photoPath?.let { File(it) }?.takeIf { it.exists() }
     Column(
         modifier = Modifier
-            .clip(RoundedCornerShape(22.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .glass(RoundedCornerShape(22.dp))
             .clickable(onClick = onClick)
             .padding(8.dp),
     ) {

@@ -10,7 +10,7 @@
         android:pivotY="54"
         android:rotation="-12">
         <path
-            android:fillColor="#8B7BFF"
+            android:fillColor="#FF5D5D"
             android:pathData="M39,30h26a4,4 0,0 1,4 4v38a4,4 0,0 1,-4 4h-26a4,4 0,0 1,-4 -4v-38a4,4 0,0 1,4 -4z" />
     </group>
     <!-- vordere Karte -->
@@ -23,7 +23,7 @@
             android:pathData="M42,30h26a4,4 0,0 1,4 4v38a4,4 0,0 1,-4 4h-26a4,4 0,0 1,-4 -4v-38a4,4 0,0 1,4 -4z" />
         <!-- Funkeln -->
         <path
-            android:fillColor="#141829"
+            android:fillColor="#0C1235"
             android:pathData="M55,41l2.8,8.2l8.2,2.8l-8.2,2.8l-2.8,8.2l-2.8,-8.2l-8.2,-2.8l8.2,-2.8z" />
     </group>
 </vector>

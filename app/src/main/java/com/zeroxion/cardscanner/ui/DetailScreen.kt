@@ -47,6 +47,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
@@ -145,12 +146,16 @@ fun DetailScreen(
                         onClick = { showPhoto = true },
                         label = { Text("Mein Foto") },
                         shape = RoundedCornerShape(50),
+                        colors = glassChipColors(),
+                        border = glassChipBorder(showPhoto),
                     )
                     FilterChip(
                         selected = !showPhoto,
                         onClick = { showPhoto = false },
                         label = { Text("Kartenbild") },
                         shape = RoundedCornerShape(50),
+                        colors = glassChipColors(),
+                        border = glassChipBorder(!showPhoto),
                     )
                 }
             }
@@ -189,12 +194,16 @@ fun DetailScreen(
                         onClick = { vm.setVariant(item.uid, VARIANT_NORMAL) },
                         label = { Text("Normal") },
                         shape = RoundedCornerShape(50),
+                        colors = glassChipColors(),
+                        border = glassChipBorder(item.variant == VARIANT_NORMAL),
                     )
                     FilterChip(
                         selected = item.variant == VARIANT_HOLO,
                         onClick = { vm.setVariant(item.uid, VARIANT_HOLO) },
                         label = { Text("Holo / Reverse") },
                         shape = RoundedCornerShape(50),
+                        colors = glassChipColors(),
+                        border = glassChipBorder(item.variant == VARIANT_HOLO),
                     )
                 }
             }
@@ -216,8 +225,7 @@ fun DetailScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(22.dp))
-                    .background(MaterialTheme.colorScheme.surfaceContainer)
+                    .glass(RoundedCornerShape(22.dp))
                     .padding(horizontal = 18.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -316,8 +324,7 @@ fun PricePanel(prices: Prices?, updated: String?, modifier: Modifier = Modifier)
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(24.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .glass(RoundedCornerShape(24.dp))
             .padding(18.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -372,7 +379,7 @@ private fun PriceStat(label: String, value: Double?, modifier: Modifier = Modifi
     Column(
         modifier = modifier
             .clip(RoundedCornerShape(14.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+            .background(Color.White.copy(alpha = 0.07f))
             .padding(horizontal = 8.dp, vertical = 10.dp),
     ) {
         Text(

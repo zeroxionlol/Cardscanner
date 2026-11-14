@@ -100,6 +100,9 @@ dependencies {
     implementation("com.google.mlkit:text-recognition-korean:16.0.1")
     implementation("com.google.mlkit:text-recognition-chinese:16.0.1")
 
+    // Echte Milchglas-Unschärfe (Navigationsleiste)
+    implementation("dev.chrisbanes.haze:haze:1.2.2")
+
     // Bilder laden
     implementation("io.coil-kt:coil-compose:2.7.0")
 

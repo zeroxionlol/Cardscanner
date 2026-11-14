@@ -640,10 +640,9 @@ private fun ResultPane(vm: MainViewModel, state: ScanState.Result, padding: Padd
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(18.dp))
-                            .background(MaterialTheme.colorScheme.secondaryContainer)
+                            .glass(RoundedCornerShape(18.dp), tint = Water, strength = 1.6f)
                             .padding(14.dp),
-                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        color = MaterialTheme.colorScheme.onSurface,
                     )
                 }
             }
@@ -721,12 +720,16 @@ private fun ResultPane(vm: MainViewModel, state: ScanState.Result, padding: Padd
                                 onClick = { variant = VARIANT_NORMAL },
                                 label = { Text("Normal") },
                                 shape = RoundedCornerShape(50),
+                                colors = glassChipColors(),
+                                border = glassChipBorder(variant == VARIANT_NORMAL),
                             )
                             FilterChip(
                                 selected = variant == VARIANT_HOLO,
                                 onClick = { variant = VARIANT_HOLO },
                                 label = { Text("Holo / Reverse") },
                                 shape = RoundedCornerShape(50),
+                                colors = glassChipColors(),
+                                border = glassChipBorder(variant == VARIANT_HOLO),
                             )
                         }
                     }
@@ -774,6 +777,7 @@ private fun ResultPane(vm: MainViewModel, state: ScanState.Result, padding: Padd
                         singleLine = true,
                         shape = RoundedCornerShape(18.dp),
                         placeholder = { Text("z. B. Glurak ex") },
+                        colors = glassFieldColors(),
                         trailingIcon = {
                             if (state.searching) {
                                 CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
@@ -811,7 +815,7 @@ private fun ResultPane(vm: MainViewModel, state: ScanState.Result, padding: Padd
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surfaceContainer)
+                .frostedPanel(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
                 .padding(
                     start = 20.dp,
                     end = 20.dp,
@@ -860,8 +864,7 @@ private fun CandidateChip(card: CardInfo, selected: Boolean, onClick: () -> Unit
     Column(
         modifier = Modifier
             .width(112.dp)
-            .clip(RoundedCornerShape(18.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .glass(RoundedCornerShape(18.dp))
             .border(2.dp, outline, RoundedCornerShape(18.dp))
             .clickable(onClick = onClick)
             .padding(8.dp),
@@ -895,8 +898,7 @@ private fun BriefChip(brief: CardBrief, onClick: () -> Unit) {
     Column(
         modifier = Modifier
             .width(112.dp)
-            .clip(RoundedCornerShape(18.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .glass(RoundedCornerShape(18.dp))
             .clickable(onClick = onClick)
             .padding(8.dp),
     ) {

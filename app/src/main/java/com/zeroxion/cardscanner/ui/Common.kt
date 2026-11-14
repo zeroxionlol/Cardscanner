@@ -17,6 +17,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -52,13 +53,13 @@ fun CardImage(
     contentScale: ContentScale = ContentScale.Crop,
 ) {
     Box(
-        modifier = modifier.background(MaterialTheme.colorScheme.surfaceContainerHighest),
+        modifier = modifier.background(Color.White.copy(alpha = 0.06f)),
         contentAlignment = Alignment.Center,
     ) {
         Icon(
             Icons.Rounded.Style,
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.outline,
+            tint = Color.White.copy(alpha = 0.25f),
         )
         if (model != null) {
             AsyncImage(
@@ -92,13 +93,13 @@ fun CardArt(
     val urls = remember(imageBase, high) { artUrls(imageBase, high) }
     var index by remember(imageBase, high) { mutableIntStateOf(0) }
     Box(
-        modifier = modifier.background(MaterialTheme.colorScheme.surfaceContainerHighest),
+        modifier = modifier.background(Color.White.copy(alpha = 0.06f)),
         contentAlignment = Alignment.Center,
     ) {
         Icon(
             Icons.Rounded.Style,
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.outline,
+            tint = Color.White.copy(alpha = 0.25f),
         )
         val url = urls.getOrNull(index)
         if (url != null) {
@@ -122,7 +123,7 @@ fun PricePill(text: String, modifier: Modifier = Modifier) {
         style = MaterialTheme.typography.labelLarge,
         modifier = modifier
             .clip(RoundedCornerShape(50))
-            .background(Gold)
+            .background(Brush.verticalGradient(listOf(Color(0xFFFFE27A), Gold)))
             .padding(horizontal = 10.dp, vertical = 4.dp),
     )
 }

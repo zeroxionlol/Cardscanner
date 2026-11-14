@@ -16,10 +16,8 @@ import androidx.compose.material.icons.rounded.PhotoCamera
 import androidx.compose.material.icons.rounded.Style
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -32,6 +30,13 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.unit.dp
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeSource
+import com.zeroxion.cardscanner.ui.AppBackground
+import com.zeroxion.cardscanner.ui.GlassNavBar
+import com.zeroxion.cardscanner.ui.NavEntry
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.zeroxion.cardscanner.ui.BinderListScreen
@@ -92,47 +97,49 @@ fun CardscannerApp(vm: MainViewModel = viewModel()) {
         if (openBinder != null) binderId = null else tab = TAB_COLLECTION
     }
 
+    val hazeState = remember { HazeState() }
+    val navEntries = remember {
+        listOf(
+            NavEntry("Sammlung", Icons.Rounded.Style),
+            NavEntry("Binder", Icons.Rounded.AutoStories),
+            NavEntry("Scannen", Icons.Rounded.PhotoCamera),
+        )
+    }
+
     Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
-        snackbarHost = { SnackbarHost(snackbar) },
+        containerColor = Color.Transparent,
+        snackbarHost = {
+            SnackbarHost(snackbar) { data ->
+                Snackbar(
+                    snackbarData = data,
+                    shape = RoundedCornerShape(18.dp),
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                    contentColor = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+        },
         bottomBar = {
             if (detailItem == null) {
-                NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainer) {
-                    val colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = MaterialTheme.colorScheme.onPrimary,
-                        indicatorColor = MaterialTheme.colorScheme.primary,
-                        selectedTextColor = MaterialTheme.colorScheme.primary,
-                    )
-                    NavigationBarItem(
-                        selected = tab == TAB_COLLECTION,
-                        onClick = { tab = TAB_COLLECTION },
-                        icon = { Icon(Icons.Rounded.Style, contentDescription = null) },
-                        label = { Text("Sammlung") },
-                        colors = colors,
-                    )
-                    NavigationBarItem(
-                        selected = tab == TAB_BINDERS,
-                        onClick = {
-                            // Erneutes Tippen auf "Binder" führt zurück zur Übersicht.
-                            if (tab == TAB_BINDERS) binderId = null
-                            tab = TAB_BINDERS
-                        },
-                        icon = { Icon(Icons.Rounded.AutoStories, contentDescription = null) },
-                        label = { Text("Binder") },
-                        colors = colors,
-                    )
-                    NavigationBarItem(
-                        selected = tab == TAB_SCAN,
-                        onClick = { tab = TAB_SCAN },
-                        icon = { Icon(Icons.Rounded.PhotoCamera, contentDescription = null) },
-                        label = { Text("Scannen") },
-                        colors = colors,
-                    )
-                }
+                GlassNavBar(
+                    entries = navEntries,
+                    selected = tab,
+                    onSelect = { next ->
+                        // Erneutes Tippen auf "Binder" führt zurück zur Übersicht.
+                        if (next == TAB_BINDERS && tab == TAB_BINDERS) binderId = null
+                        tab = next
+                    },
+                    hazeState = hazeState,
+                )
             }
         },
     ) { padding ->
-        Box(Modifier.fillMaxSize()) {
+        // Alles hier drin ist Quelle für die Unschärfe hinter der Navigationsleiste.
+        Box(
+            Modifier
+                .fillMaxSize()
+                .hazeSource(hazeState),
+        ) {
+            AppBackground()
             when {
                 detailItem != null -> {
                     val start = detailItems.indexOfFirst { it.uid == detailItem.uid }.coerceAtLeast(0)

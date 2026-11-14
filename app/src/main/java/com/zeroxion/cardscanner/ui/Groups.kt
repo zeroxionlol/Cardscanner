@@ -10,7 +10,10 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material3.AlertDialog
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
+import androidx.compose.ui.graphics.Color
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
@@ -75,10 +78,8 @@ fun SetChip(label: String, selected: Boolean, onClick: () -> Unit) {
         onClick = onClick,
         label = { Text(label) },
         shape = RoundedCornerShape(50),
-        colors = FilterChipDefaults.filterChipColors(
-            selectedContainerColor = MaterialTheme.colorScheme.primary,
-            selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
-        ),
+        colors = glassChipColors(),
+        border = glassChipBorder(selected),
     )
 }
 
@@ -87,8 +88,12 @@ fun NewSetChip(onClick: () -> Unit) {
     AssistChip(
         onClick = onClick,
         label = { Text("Neue Kategorie") },
-        leadingIcon = { Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp)) },
+        leadingIcon = {
+            Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp), tint = Electric)
+        },
         shape = RoundedCornerShape(50),
+        colors = AssistChipDefaults.assistChipColors(containerColor = Color.White.copy(alpha = 0.04f)),
+        border = BorderStroke(1.dp, Electric.copy(alpha = 0.45f)),
     )
 }
 
