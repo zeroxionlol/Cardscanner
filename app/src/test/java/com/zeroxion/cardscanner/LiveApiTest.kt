@@ -101,5 +101,11 @@ class LiveApiTest {
         val hyphenNoTotal = CardMatcher.find(ParsedCard(listOf("Glurak ex"), "125", null), "de")
         println("LIVE matcher hyphenNoTotal: ${hyphenNoTotal.map { it.id + " " + it.name }}")
         assertTrue(hyphenNoTotal.any { it.id == "sv03-125" })
+
+        // Karten der digitalen Pocket-App dürfen nicht als Treffer erscheinen.
+        val digital = TcgDexApi.digitalSetIds()
+        println("LIVE digital sets: $digital")
+        assertTrue(digital.contains("a1"))
+        assertTrue(hyphenNoTotal.none { it.setId.lowercase() in digital })
     }
 }

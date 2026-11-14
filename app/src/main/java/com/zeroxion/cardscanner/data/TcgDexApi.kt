@@ -86,6 +86,34 @@ object TcgDexApi {
         return out
     }
 
+    @Volatile
+    private var digitalCache: Set<String>? = null
+
+    /**
+     * Sets der rein digitalen Pocket-App. Diese Karten gibt es nicht gedruckt,
+     * sie sollen beim Scannen echter Karten nicht als Treffer auftauchen.
+     */
+    fun digitalSetIds(): Set<String> {
+        digitalCache?.let { return it }
+        val ids = try {
+            val sets = httpGet("$BASE/en/series/tcgp")?.let { JSONObject(it).optJSONArray("sets") }
+            val out = HashSet<String>()
+            if (sets != null) {
+                for (i in 0 until sets.length()) {
+                    sets.optJSONObject(i)?.str("id")?.let { out += it.lowercase() }
+                }
+            }
+            out
+        } catch (e: Exception) {
+            return emptySet()
+        }
+        digitalCache = ids
+        return ids
+    }
+
+    private fun isPrinted(cardId: String): Boolean =
+        cardId.substringBeforeLast('-').lowercase() !in digitalSetIds()
+
     /** Karten eines Sets (Kurzform). Leere Liste, wenn es das Set in der Sprache nicht gibt. */
     fun setCards(lang: String, setId: String): List<CardBrief> {
         val body = httpGet("$BASE/$lang/sets/${enc(setId)}") ?: return emptyList()
@@ -95,7 +123,7 @@ object TcgDexApi {
     /** Namenssuche (enthält, Groß-/Kleinschreibung egal). */
     fun searchByName(lang: String, name: String): List<CardBrief> {
         val body = httpGet("$BASE/$lang/cards?name=${enc(name)}") ?: return emptyList()
-        return parseBriefs(JSONArray(body))
+        return parseBriefs(JSONArray(body)).filter { isPrinted(it.id) }
     }
 
     private fun parsePrices(cm: JSONObject, suffix: String): Prices? {

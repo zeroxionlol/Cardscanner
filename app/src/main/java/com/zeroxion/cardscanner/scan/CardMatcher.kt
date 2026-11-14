@@ -34,8 +34,10 @@ object CardMatcher {
 
         // 1) Nummer + Setgröße ("136/189") grenzen das Set meist eindeutig ein.
         if (localId != null && setTotal != null) {
+            val digital = TcgDexApi.digitalSetIds()
             val sets = TcgDexApi.sets()
                 .filter { it.official == setTotal || it.total == setTotal }
+                .filterNot { it.id.lowercase() in digital }
                 .take(8)
             sets.map { set ->
                 async(Dispatchers.IO) {
