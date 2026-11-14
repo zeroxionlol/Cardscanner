@@ -72,13 +72,16 @@ class CardTextParserTest {
 
     @Test
     fun searchTermsGetCoarser() {
-        assertEquals(listOf("Glurak ex", "Glurak"), CardTextParser.searchTerms("Glurak ex"))
+        assertEquals(listOf("Glurak", "Glurak ex"), CardTextParser.searchTerms("Glurak ex"))
+        assertEquals(listOf("Glurak", "Glurak-ex"), CardTextParser.searchTerms("Glurak-ex"))
         assertEquals(listOf("Pikachu"), CardTextParser.searchTerms("Pikachu"))
+        assertEquals(listOf("Professors Forschung", "Professors"), CardTextParser.searchTerms("Professors Forschung"))
     }
 
     @Test
     fun similarityRanksCloserNamesHigher() {
         assertEquals(1.0, CardTextParser.similarity("Glurak", "glurak"), 0.0001)
+        assertEquals(1.0, CardTextParser.similarity("Glurak-ex", "Glurak ex"), 0.0001)
         assertTrue(CardTextParser.similarity("Glurak", "Glurax") > CardTextParser.similarity("Glurak", "Pikachu"))
     }
 }

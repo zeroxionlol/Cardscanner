@@ -92,5 +92,14 @@ class LiveApiTest {
         val nameOnly = CardMatcher.find(ParsedCard(listOf(target.name), null, null), "de")
         println("LIVE matcher nameOnly: ${nameOnly.map { it.id + " " + it.name }}")
         assertTrue(nameOnly.isNotEmpty())
+
+        // Aufdruck "Glurak ex", in der Datenbank "Glurak-ex" (Obsidian Flammen 125/197).
+        val hyphen = CardMatcher.find(ParsedCard(listOf("Glurak ex"), "125", 197), "de")
+        println("LIVE matcher hyphen: ${hyphen.map { it.id + " " + it.name }}")
+        assertEquals("sv03-125", hyphen.first().id)
+
+        val hyphenNoTotal = CardMatcher.find(ParsedCard(listOf("Glurak ex"), "125", null), "de")
+        println("LIVE matcher hyphenNoTotal: ${hyphenNoTotal.map { it.id + " " + it.name }}")
+        assertTrue(hyphenNoTotal.any { it.id == "sv03-125" })
     }
 }

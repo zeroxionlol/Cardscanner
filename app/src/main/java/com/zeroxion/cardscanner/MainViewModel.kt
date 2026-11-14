@@ -150,9 +150,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             val result = runCatching {
                 withContext(Dispatchers.IO) {
-                    val local = TcgDexApi.searchByName(lang, term)
-                    val other = if (local.size < 5) TcgDexApi.searchByName(if (lang == "de") "en" else "de", term) else emptyList()
-                    (local + other).distinctBy { it.id }.asReversed().take(60)
+                    val other = if (lang == "de") "en" else "de"
+                    var hits = emptyList<CardBrief>()
+                    for (candidate in CardTextParser.searchTerms(term).ifEmpty { listOf(term) }) {
+                        hits = TcgDexApi.searchByName(lang, candidate)
+                        if (hits.isEmpty()) hits = TcgDexApi.searchByName(other, candidate)
+                        if (hits.isNotEmpty()) break
+                    }
+                    // Neueste zuerst, dann nach Ähnlichkeit zum Suchbegriff.
+                    hits.distinctBy { it.id }
+                        .asReversed()
+                        .sortedByDescending { CardTextParser.similarity(it.name, term) }
+                        .take(60)
                 }
             }
             val current = _scan.value as? ScanState.Result ?: return@launch

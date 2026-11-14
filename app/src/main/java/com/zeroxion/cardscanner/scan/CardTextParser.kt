@@ -91,12 +91,16 @@ object CardTextParser {
         return s
     }
 
-    /** Suchbegriffe von genau nach grob: ganzer Name, Name ohne Zusatz (ex, V …), längstes Wort. */
+    /**
+     * Suchbegriffe für die Namenssuche. Zuerst der Name ohne Zusatz (ex, V …):
+     * so findet "Glurak ex" sowohl "Glurak EX" als auch "Glurak-ex".
+     */
     fun searchTerms(name: String): List<String> {
-        val words = name.split(' ').filter { it.isNotBlank() }
-        val base = words.filterNot { it.lowercase() in suffixes }.joinToString(" ")
-        val longest = words.filterNot { it.lowercase() in suffixes }.maxByOrNull { it.length } ?: ""
-        return listOf(name, base, longest).filter { it.length >= 3 }.distinct()
+        val words = name.replace('-', ' ').split(' ').filter { it.isNotBlank() }
+        val core = words.filterNot { it.lowercase() in suffixes }
+        val base = core.joinToString(" ")
+        val longest = core.maxByOrNull { it.length } ?: ""
+        return listOf(base, longest, name).filter { it.length >= 3 }.distinct()
     }
 
     /** Vergleicht Kartennummern unabhängig von führenden Nullen und Großschreibung ("004" = "4"). */
@@ -110,8 +114,8 @@ object CardTextParser {
 
     /** Ähnlichkeit zweier Namen von 0 bis 1. */
     fun similarity(a: String, b: String): Double {
-        val x = a.lowercase().trim()
-        val y = b.lowercase().trim()
+        val x = a.lowercase().replace('-', ' ').trim()
+        val y = b.lowercase().replace('-', ' ').trim()
         if (x.isEmpty() || y.isEmpty()) return 0.0
         if (x == y) return 1.0
         if (x.contains(y) || y.contains(x)) return 0.8

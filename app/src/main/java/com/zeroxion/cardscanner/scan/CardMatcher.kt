@@ -21,7 +21,7 @@ object CardMatcher {
         return TcgDexApi.searchByName("en", term)
     }
 
-    /** Beste Treffer zuerst, höchstens sechs. */
+    /** Beste Treffer zuerst, höchstens acht. */
     suspend fun find(parsed: ParsedCard, lang: String): List<CardInfo> = coroutineScope {
         val scored = LinkedHashMap<String, Scored>()
         fun offer(brief: CardBrief, score: Int) {
@@ -53,7 +53,8 @@ object CardMatcher {
             for (term in CardTextParser.searchTerms(name)) {
                 val hits = searchBoth(lang, term)
                 if (hits.isEmpty()) continue
-                for (hit in hits) {
+                // Die API liefert alt → neu; bei gleicher Wertung sollen neuere Karten vorn stehen.
+                for (hit in hits.asReversed()) {
                     val idMatch = localId != null && CardTextParser.sameLocalId(hit.localId, localId)
                     val base = when {
                         idMatch -> 60
@@ -66,7 +67,7 @@ object CardMatcher {
             }
         }
 
-        val top = scored.values.sortedByDescending { it.score }.take(6)
+        val top = scored.values.sortedByDescending { it.score }.take(8)
         top.map { s ->
             async(Dispatchers.IO) {
                 val card = runCatching { TcgDexApi.card(lang, s.brief.id) }.getOrNull()
