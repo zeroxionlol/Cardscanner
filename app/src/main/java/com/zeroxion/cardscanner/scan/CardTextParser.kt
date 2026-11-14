@@ -23,6 +23,9 @@ data class ParsedCard(
 object CardTextParser {
     private val fraction =
         Regex("""(?<![A-Za-z0-9])([A-Za-z]{0,3}\d{1,3})\s*/\s*([A-Za-z]{0,3}\d{2,3})(?![0-9])""")
+    /** Wie [fraction], aber tolerant gegenüber typischen Lesefehlern (O statt 0, l/I statt 1). */
+    private val looseFraction =
+        Regex("""(?<![A-Za-z0-9])([0-9OoIl|]{1,3})\s*/\s*([0-9OoIl|]{2,3})(?![A-Za-z0-9])""")
     private val promo =
         Regex("""(?<![A-Z0-9])(SWSH|SVP|SM|XY|BW|HGSS|DP)\s?(\d{1,3})(?![0-9])""")
     private val hitPoints =
@@ -40,26 +43,53 @@ object CardTextParser {
     )
     private val suffixes = setOf("ex", "v", "vmax", "vstar", "gx", "v-union", "break", "lv.x")
 
-    fun parse(lines: List<OcrLine>): ParsedCard {
+    /**
+     * @param lines Text des ganzen Fotos
+     * @param bottomLines derselbe untere Rand, vergrößert gelesen (bevorzugt für die Kartennummer)
+     */
+    fun parse(lines: List<OcrLine>, bottomLines: List<OcrLine> = emptyList()): ParsedCard {
         val usable = lines.filter { it.text.isNotBlank() }
-        if (usable.isEmpty()) return ParsedCard(emptyList(), null, null)
+        val usableBottom = bottomLines.filter { it.text.isNotBlank() }
+        if (usable.isEmpty() && usableBottom.isEmpty()) return ParsedCard(emptyList(), null, null)
 
-        val minTop = usable.minOf { it.top }
-        val maxBottom = usable.maxOf { it.bottom }
+        val all = usable + usableBottom
+        val minTop = all.minOf { it.top }
+        val maxBottom = all.maxOf { it.bottom }
         val span = (maxBottom - minTop).coerceAtLeast(1)
-        val fromBottom = usable.sortedByDescending { it.centerY }
 
+        // Kartennummer: erst im vergrößerten unteren Rand suchen, dann im ganzen Foto – jeweils von unten.
+        val numberSources = listOf(
+            usableBottom.sortedByDescending { it.centerY },
+            usable.sortedByDescending { it.centerY },
+        )
         var localId: String? = null
         var total: Int? = null
-        val fractionHit = fromBottom.firstNotNullOfOrNull { fraction.find(it.text) }
-        if (fractionHit != null) {
-            localId = fractionHit.groupValues[1].uppercase()
-            total = fractionHit.groupValues[2].filter { it.isDigit() }.toIntOrNull()
-        } else {
-            val promoHit = fromBottom
-                .filter { it.centerY > minTop + span / 2 }
-                .firstNotNullOfOrNull { promo.find(it.text.uppercase()) }
-            if (promoHit != null) localId = promoHit.groupValues[1] + promoHit.groupValues[2]
+        for (source in numberSources) {
+            val hit = source.firstNotNullOfOrNull { fraction.find(it.text) } ?: continue
+            localId = fixDigits(hit.groupValues[1].uppercase())
+            total = hit.groupValues[2].filter { it.isDigit() }.toIntOrNull()
+            break
+        }
+        if (localId == null) {
+            for (source in numberSources) {
+                val hit = source.firstNotNullOfOrNull { line ->
+                    looseFraction.findAll(line.text).firstOrNull { m ->
+                        m.groupValues[1].any { it.isDigit() } && m.groupValues[2].any { it.isDigit() }
+                    }
+                } ?: continue
+                localId = asDigits(hit.groupValues[1])
+                total = asDigits(hit.groupValues[2]).toIntOrNull()
+                break
+            }
+        }
+        if (localId == null) {
+            for (source in numberSources) {
+                val hit = source
+                    .filter { it.centerY > minTop + span / 2 }
+                    .firstNotNullOfOrNull { promo.find(it.text.uppercase()) } ?: continue
+                localId = hit.groupValues[1] + hit.groupValues[2]
+                break
+            }
         }
 
         val topZone = usable.filter { it.centerY <= minTop + span * 0.25 }
@@ -72,6 +102,23 @@ object CardTextParser {
             .take(3)
 
         return ParsedCard(names, localId, total)
+    }
+
+    private fun asDigits(token: String): String =
+        token.map { c ->
+            when (c) {
+                'O', 'o' -> '0'
+                'I', 'l', '|' -> '1'
+                else -> c
+            }
+        }.joinToString("")
+
+    /** "I17" oder "O49" sind verlesene Ziffern, "TG12" oder "SV107" echte Kennungen. */
+    private fun fixDigits(id: String): String {
+        val prefix = id.takeWhile { !it.isDigit() }
+        return if (prefix.isNotEmpty() && prefix.all { it == 'O' || it == 'I' || it == 'L' }) {
+            prefix.map { if (it == 'O') '0' else '1' }.joinToString("") + id.drop(prefix.length)
+        } else id
     }
 
     /** Entfernt KP-Angaben, Entwicklungsstufen und Sonderzeichen aus einer Namenszeile. */

@@ -11,6 +11,7 @@ import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.Preview
+import androidx.camera.core.UseCaseGroup
 import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
@@ -76,6 +77,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -84,6 +86,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import androidx.core.view.doOnLayout
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.zeroxion.cardscanner.MainViewModel
@@ -92,6 +95,9 @@ import com.zeroxion.cardscanner.data.CardBrief
 import com.zeroxion.cardscanner.data.CardInfo
 import com.zeroxion.cardscanner.data.VARIANT_HOLO
 import com.zeroxion.cardscanner.data.VARIANT_NORMAL
+import com.zeroxion.cardscanner.scan.FrameCrop
+import com.zeroxion.cardscanner.scan.ParsedCard
+import com.zeroxion.cardscanner.scan.ScanFrame
 import java.io.File
 
 @Composable
@@ -109,6 +115,7 @@ fun ScanScreen(vm: MainViewModel, padding: PaddingValues) {
 @Composable
 private fun CameraPane(vm: MainViewModel, padding: PaddingValues) {
     val context = LocalContext.current
+    val density = LocalDensity.current
     val lang by vm.lang.collectAsStateWithLifecycle()
     var granted by remember {
         mutableStateOf(
@@ -132,20 +139,36 @@ private fun CameraPane(vm: MainViewModel, padding: PaddingValues) {
             .setResolutionSelector(
                 ResolutionSelector.Builder()
                     .setResolutionStrategy(
+                        // Rund 12 Megapixel: genug, damit die kleine Kartennummer lesbar bleibt.
                         ResolutionStrategy(
-                            android.util.Size(2048, 1536),
-                            ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER,
+                            android.util.Size(4000, 3000),
+                            ResolutionStrategy.FALLBACK_RULE_CLOSEST_LOWER_THEN_HIGHER,
                         ),
                     )
                     .build(),
             )
             .build()
     }
+    val previewView = remember {
+        PreviewView(context).apply {
+            scaleType = PreviewView.ScaleType.FILL_CENTER
+            implementationMode = PreviewView.ImplementationMode.COMPATIBLE
+        }
+    }
     var torch by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
 
+    // Platz für Kopfzeile und Bedienleiste – dazwischen liegt der Rahmen, nichts verdeckt ihn.
+    val topReserved = with(density) { (padding.calculateTopPadding() + 68.dp).toPx() }
+    val bottomReserved = with(density) { (padding.calculateBottomPadding() + 112.dp).toPx() }
+
     fun capture() {
         if (busy) return
+        val viewWidth = previewView.width.toFloat()
+        val viewHeight = previewView.height.toFloat()
+        val frame = if (viewWidth > 0f && viewHeight > 0f) {
+            FrameCrop(viewWidth, viewHeight, ScanFrame.frame(viewWidth, viewHeight, topReserved, bottomReserved))
+        } else null
         busy = true
         val file = File(context.cacheDir, "capture.jpg")
         imageCapture.takePicture(
@@ -154,7 +177,7 @@ private fun CameraPane(vm: MainViewModel, padding: PaddingValues) {
             object : ImageCapture.OnImageSavedCallback {
                 override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
                     busy = false
-                    vm.onImage(Uri.fromFile(file))
+                    vm.onImage(Uri.fromFile(file), frame)
                 }
 
                 override fun onError(exception: ImageCaptureException) {
@@ -171,8 +194,13 @@ private fun CameraPane(vm: MainViewModel, padding: PaddingValues) {
             .background(Color.Black),
     ) {
         if (granted) {
-            CameraPreview(imageCapture = imageCapture, torch = torch, modifier = Modifier.fillMaxSize())
-            FrameOverlay()
+            CameraPreview(
+                previewView = previewView,
+                imageCapture = imageCapture,
+                torch = torch,
+                modifier = Modifier.fillMaxSize(),
+            )
+            FrameOverlay(topReserved = topReserved, bottomReserved = bottomReserved)
         } else {
             Column(
                 modifier = Modifier
@@ -207,9 +235,11 @@ private fun CameraPane(vm: MainViewModel, padding: PaddingValues) {
             Column(Modifier.weight(1f)) {
                 Text("Karte scannen", style = MaterialTheme.typography.titleLarge, color = Color.White)
                 Text(
-                    "Karte in den Rahmen legen, gerade und ohne Spiegelung",
+                    "Karte füllt den Rahmen, ohne Spiegelung",
                     style = MaterialTheme.typography.bodySmall,
                     color = Color.White.copy(alpha = 0.8f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
             Text(
@@ -229,7 +259,7 @@ private fun CameraPane(vm: MainViewModel, padding: PaddingValues) {
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
-                .padding(bottom = padding.calculateBottomPadding() + 24.dp, start = 32.dp, end = 32.dp),
+                .padding(bottom = padding.calculateBottomPadding() + 16.dp, start = 32.dp, end = 32.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
@@ -241,7 +271,7 @@ private fun CameraPane(vm: MainViewModel, padding: PaddingValues) {
 
             Box(
                 modifier = Modifier
-                    .size(84.dp)
+                    .size(76.dp)
                     .clip(CircleShape)
                     .border(4.dp, Color.White, CircleShape)
                     .padding(8.dp)
@@ -285,36 +315,53 @@ private fun RoundControl(onClick: () -> Unit, enabled: Boolean = true, content: 
 }
 
 @Composable
-private fun CameraPreview(imageCapture: ImageCapture, torch: Boolean, modifier: Modifier = Modifier) {
+private fun CameraPreview(
+    previewView: PreviewView,
+    imageCapture: ImageCapture,
+    torch: Boolean,
+    modifier: Modifier = Modifier,
+) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    val previewView = remember {
-        PreviewView(context).apply {
-            scaleType = PreviewView.ScaleType.FILL_CENTER
-            implementationMode = PreviewView.ImplementationMode.COMPATIBLE
-        }
-    }
     var camera by remember { mutableStateOf<Camera?>(null) }
 
-    DisposableEffect(lifecycleOwner) {
+    DisposableEffect(lifecycleOwner, previewView) {
         val future = ProcessCameraProvider.getInstance(context)
+        var disposed = false
         future.addListener({
-            try {
-                val provider = future.get()
-                val preview = Preview.Builder().build()
-                preview.setSurfaceProvider(previewView.surfaceProvider)
-                provider.unbindAll()
-                camera = provider.bindToLifecycle(
-                    lifecycleOwner,
-                    CameraSelector.DEFAULT_BACK_CAMERA,
-                    preview,
-                    imageCapture,
-                )
-            } catch (e: Exception) {
-                camera = null
+            // Erst binden, wenn die Vorschau ihre Größe kennt: dann lässt sich festlegen,
+            // dass das Foto genau den sichtbaren Ausschnitt der Vorschau enthält.
+            previewView.doOnLayout {
+                if (!disposed) {
+                    try {
+                        val provider = future.get()
+                        val preview = Preview.Builder().build()
+                        preview.setSurfaceProvider(previewView.surfaceProvider)
+                        val viewPort = previewView.viewPort
+                        provider.unbindAll()
+                        camera = if (viewPort != null) {
+                            val group = UseCaseGroup.Builder()
+                                .setViewPort(viewPort)
+                                .addUseCase(preview)
+                                .addUseCase(imageCapture)
+                                .build()
+                            provider.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, group)
+                        } else {
+                            provider.bindToLifecycle(
+                                lifecycleOwner,
+                                CameraSelector.DEFAULT_BACK_CAMERA,
+                                preview,
+                                imageCapture,
+                            )
+                        }
+                    } catch (e: Exception) {
+                        camera = null
+                    }
+                }
             }
         }, ContextCompat.getMainExecutor(context))
         onDispose {
+            disposed = true
             runCatching { if (future.isDone) future.get().unbindAll() }
         }
     }
@@ -329,29 +376,26 @@ private fun CameraPreview(imageCapture: ImageCapture, torch: Boolean, modifier: 
 
 /** Abgedunkelter Rand mit einem Ausschnitt im Kartenformat (63 × 88). */
 @Composable
-private fun FrameOverlay() {
+private fun FrameOverlay(topReserved: Float, bottomReserved: Float) {
     Canvas(
         Modifier
             .fillMaxSize()
             .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen },
     ) {
-        val w = minOf(size.width * 0.8f, size.height * 0.58f * 63f / 88f)
-        val h = w * 88f / 63f
-        val left = (size.width - w) / 2f
-        val top = (size.height - h) / 2f - size.height * 0.02f
-        val radius = CornerRadius(w * 0.055f)
-        drawRect(Color.Black.copy(alpha = 0.55f))
+        val box = ScanFrame.frame(size.width, size.height, topReserved, bottomReserved)
+        val radius = CornerRadius(box.width * 0.055f)
+        drawRect(Color.Black.copy(alpha = 0.6f))
         drawRoundRect(
             color = Color.Black,
-            topLeft = Offset(left, top),
-            size = Size(w, h),
+            topLeft = Offset(box.left, box.top),
+            size = Size(box.width, box.height),
             cornerRadius = radius,
             blendMode = BlendMode.Clear,
         )
         drawRoundRect(
             color = Gold,
-            topLeft = Offset(left, top),
-            size = Size(w, h),
+            topLeft = Offset(box.left, box.top),
+            size = Size(box.width, box.height),
             cornerRadius = radius,
             style = Stroke(width = 3.dp.toPx()),
         )
@@ -417,6 +461,13 @@ private fun ResultPane(vm: MainViewModel, state: ScanState.Result, padding: Padd
                     if (selected != null) "Ist das deine Karte?" else "Karte nicht erkannt",
                     style = MaterialTheme.typography.headlineSmall,
                 )
+                Text(
+                    readSummary(state.parsed),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
             IconButton(onClick = { vm.discardScan() }) {
                 Icon(Icons.Rounded.Close, contentDescription = "Verwerfen")
@@ -461,9 +512,9 @@ private fun ResultPane(vm: MainViewModel, state: ScanState.Result, padding: Padd
                         )
                     }
                     Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                        CardImage(
-                            model = selected?.imageUrl(high = true),
-                            contentScale = ContentScale.Fit,
+                        CardArt(
+                            imageBase = selected?.imageBase,
+                            high = true,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .aspectRatio(63f / 88f)
@@ -574,6 +625,11 @@ private fun ResultPane(vm: MainViewModel, state: ScanState.Result, padding: Padd
                         }),
                     )
                     if (state.searchResults.isNotEmpty()) {
+                        Text(
+                            "${state.searchResults.size} Karten gefunden – antippen zum Übernehmen",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                         LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             items(state.searchResults, key = { it.id }) { brief ->
                                 BriefChip(brief = brief, onClick = { vm.pickSearchResult(brief) })
@@ -619,6 +675,17 @@ private fun ResultPane(vm: MainViewModel, state: ScanState.Result, padding: Padd
     }
 }
 
+/** Kurz, was die Texterkennung auf der Karte gelesen hat. */
+private fun readSummary(parsed: ParsedCard): String {
+    val name = parsed.names.firstOrNull()?.let { "„$it“" } ?: "kein Name"
+    val number = when {
+        parsed.localId != null && parsed.setTotal != null -> "Nr. ${parsed.localId}/${parsed.setTotal}"
+        parsed.localId != null -> "Nr. ${parsed.localId}"
+        else -> "Nummer nicht lesbar"
+    }
+    return "Gelesen: $name · $number"
+}
+
 @Composable
 private fun CandidateChip(card: CardInfo, selected: Boolean, onClick: () -> Unit) {
     val outline = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent
@@ -631,9 +698,8 @@ private fun CandidateChip(card: CardInfo, selected: Boolean, onClick: () -> Unit
             .clickable(onClick = onClick)
             .padding(8.dp),
     ) {
-        CardImage(
-            model = card.imageUrl(),
-            contentScale = ContentScale.Fit,
+        CardArt(
+            imageBase = card.imageBase,
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(63f / 88f)
@@ -666,9 +732,8 @@ private fun BriefChip(brief: CardBrief, onClick: () -> Unit) {
             .clickable(onClick = onClick)
             .padding(8.dp),
     ) {
-        CardImage(
-            model = brief.imageUrl,
-            contentScale = ContentScale.Fit,
+        CardArt(
+            imageBase = brief.imageBase,
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(63f / 88f)

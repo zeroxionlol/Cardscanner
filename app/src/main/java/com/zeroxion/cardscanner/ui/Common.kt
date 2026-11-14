@@ -10,6 +10,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -62,6 +66,48 @@ fun CardImage(
                 contentDescription = null,
                 contentScale = contentScale,
                 modifier = Modifier.matchParentSize(),
+            )
+        }
+    }
+}
+
+private val assetLanguage = Regex("""assets\.tcgdex\.net/[a-z-]+/""")
+
+/** Mögliche Adressen für ein Kartenbild: erst die gewünschte Sprache, dann Englisch. */
+fun artUrls(imageBase: String?, high: Boolean): List<String> {
+    if (imageBase.isNullOrBlank()) return emptyList()
+    val english = assetLanguage.replace(imageBase, "assets.tcgdex.net/en/")
+    val sizes = if (high) listOf("high", "low") else listOf("low", "high")
+    return listOf(imageBase, english).distinct().flatMap { base -> sizes.map { "$base/$it.webp" } }
+}
+
+/** Offizielles Kartenbild. Fehlt es in einer Sprache oder Größe, wird die nächste versucht. */
+@Composable
+fun CardArt(
+    imageBase: String?,
+    modifier: Modifier = Modifier,
+    high: Boolean = false,
+    contentScale: ContentScale = ContentScale.Fit,
+) {
+    val urls = remember(imageBase, high) { artUrls(imageBase, high) }
+    var index by remember(imageBase, high) { mutableIntStateOf(0) }
+    Box(
+        modifier = modifier.background(MaterialTheme.colorScheme.surfaceContainerHighest),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            Icons.Rounded.Style,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.outline,
+        )
+        val url = urls.getOrNull(index)
+        if (url != null) {
+            AsyncImage(
+                model = url,
+                contentDescription = null,
+                contentScale = contentScale,
+                modifier = Modifier.matchParentSize(),
+                onError = { if (index < urls.size) index += 1 },
             )
         }
     }

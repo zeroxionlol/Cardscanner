@@ -4,7 +4,10 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.net.Uri
+import com.zeroxion.cardscanner.scan.CropFractions
+import com.zeroxion.cardscanner.scan.FrameBox
 import com.zeroxion.cardscanner.scan.ImageUtils
+import com.zeroxion.cardscanner.scan.ScanFrame
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -74,6 +77,49 @@ class ImageUtilsTest {
         assertTrue(out.exists() && out.length() > 0)
         assertEquals(File(context.filesDir, "photos").path, out.parentFile?.path)
         assertEquals(1200 to 1600, sizeOf(out))
+    }
+
+    @Test
+    fun cropKeepsOnlyTheFramedPart() {
+        // Linke Hälfte rot, rechte Hälfte blau; ausgeschnitten wird die rechte Hälfte.
+        val bitmap = Bitmap.createBitmap(1000, 800, Bitmap.Config.ARGB_8888)
+        val pixels = IntArray(1000 * 800) { i -> if (i % 1000 < 500) Color.RED else Color.BLUE }
+        bitmap.setPixels(pixels, 0, 1000, 0, 0, 1000, 800)
+        val source = tmp.newFile("halb.jpg")
+        FileOutputStream(source).use { bitmap.compress(Bitmap.CompressFormat.JPEG, 95, it) }
+
+        val out = ImageUtils.importImage(
+            tmp.newFolder("photos"),
+            2000,
+            crop = { width, height ->
+                assertEquals(1000, width)
+                assertEquals(800, height)
+                CropFractions(0.5f, 0f, 0.5f, 1f)
+            },
+        ) { FileInputStream(source) }
+
+        val result = BitmapFactory.decodeFile(out.path)
+        println("IMPORT crop -> ${result.width}x${result.height}")
+        assertEquals(500, result.width)
+        assertEquals(800, result.height)
+        for (x in listOf(40, 250, 460)) {
+            val c = result.getPixel(x, 400)
+            assertTrue("Pixel $x sollte blau sein", Color.blue(c) > 200 && Color.red(c) < 60)
+        }
+    }
+
+    @Test
+    fun framedCameraPhotoIsCutToTheFrame() {
+        // Vorschau 1000 × 2000 mit Rahmen in der Mitte, Foto im selben Format.
+        val source = jpeg(1500, 3000)
+        val box = FrameBox(250f, 500f, 500f, 700f)
+        val out = ImageUtils.importImage(tmp.newFolder("photos"), 2000, crop = { w, h ->
+            ScanFrame.toImageFractions(box, 1000f, 2000f, w, h, margin = 0f)
+        }) { FileInputStream(source) }
+        val (w, h) = sizeOf(out)
+        println("IMPORT framed -> ${w}x$h")
+        assertEquals(750, w)
+        assertEquals(1050, h)
     }
 
     @Test(expected = IOException::class)

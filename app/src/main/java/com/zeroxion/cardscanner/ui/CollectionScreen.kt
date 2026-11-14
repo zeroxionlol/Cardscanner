@@ -302,13 +302,12 @@ private fun CardTile(item: CollectionItem, onClick: () -> Unit) {
             .padding(8.dp),
     ) {
         Box {
-            CardImage(
-                model = photo ?: item.card.imageUrl(),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(63f / 88f)
-                    .clip(RoundedCornerShape(16.dp)),
-            )
+            val imageModifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(63f / 88f)
+                .clip(RoundedCornerShape(16.dp))
+            if (photo != null) CardImage(model = photo, modifier = imageModifier)
+            else CardArt(imageBase = item.card.imageBase, modifier = imageModifier)
             PricePill(
                 text = formatEuro(item.unitPrice),
                 modifier = Modifier

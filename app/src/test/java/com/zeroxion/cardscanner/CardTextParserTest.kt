@@ -57,6 +57,39 @@ class CardTextParserTest {
     }
 
     @Test
+    fun enlargedBottomStripWinsForTheNumber() {
+        // Im ganzen Foto wurde die Nummer falsch gelesen, im vergrößerten Rand richtig.
+        val lines = listOf(
+            OcrLine("BASIS Evoli KP 70", 40, 110),
+            OcrLine("Ruckzuckhieb 20+", 900, 950),
+            OcrLine("111/123", 1700, 1720),
+        )
+        val bottom = listOf(
+            OcrLine("Illus. En Morikura", 1660, 1680),
+            OcrLine("J SCR DE 117/128", 1700, 1722),
+        )
+        val parsed = CardTextParser.parse(lines, bottom)
+        assertEquals("Evoli", parsed.names.first())
+        assertEquals("117", parsed.localId)
+        assertEquals(128, parsed.setTotal)
+    }
+
+    @Test
+    fun commonMisreadsInTheNumberAreRepaired() {
+        val letterForOne = CardTextParser.parse(listOf(OcrLine("Evoli", 40, 100), OcrLine("I17/128", 1400, 1420)))
+        assertEquals("117", letterForOne.localId)
+        assertEquals(128, letterForOne.setTotal)
+
+        val mixed = CardTextParser.parse(listOf(OcrLine("Evoli", 40, 100), OcrLine("1l7/l28", 1400, 1420)))
+        assertEquals("117", mixed.localId)
+        assertEquals(128, mixed.setTotal)
+
+        val zero = CardTextParser.parse(listOf(OcrLine("Evoli", 40, 100), OcrLine("O49/165", 1400, 1420)))
+        assertEquals("049", zero.localId)
+        assertEquals(165, zero.setTotal)
+    }
+
+    @Test
     fun nothingReadable() {
         val parsed = CardTextParser.parse(emptyList())
         assertTrue(parsed.isEmpty)

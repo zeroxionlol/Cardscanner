@@ -15,70 +15,103 @@ import java.util.UUID
 
 object ImageUtils {
     /**
-     * Kopiert ein Foto (Kamera oder Galerie) in den App-Speicher: aufrecht gedreht
-     * und auf eine handliche Größe verkleinert, damit Sammlung und Texterkennung schnell bleiben.
+     * Kopiert ein Foto (Kamera oder Galerie) in den App-Speicher: aufrecht gedreht,
+     * optional auf den Scan-Rahmen zugeschnitten und auf eine handliche Größe verkleinert.
+     *
+     * [crop] bekommt Breite und Höhe des aufrechten Fotos und liefert den gewünschten Ausschnitt.
      */
-    fun importImage(context: Context, source: Uri, maxDim: Int = 2000): File {
+    fun importImage(
+        context: Context,
+        source: Uri,
+        maxDim: Int = 2000,
+        crop: ((Int, Int) -> CropFractions)? = null,
+    ): File {
         val dir = File(context.filesDir, "photos")
         val path = source.path
         return if (source.scheme == "file" && path != null) {
-            importImage(dir, maxDim) { FileInputStream(path) }
+            importImage(dir, maxDim, crop) { FileInputStream(path) }
         } else {
-            importImage(dir, maxDim) { context.contentResolver.openInputStream(source) }
+            importImage(dir, maxDim, crop) { context.contentResolver.openInputStream(source) }
         }
     }
 
     /** Kern der Verarbeitung; [open] liefert bei jedem Aufruf einen frischen Stream auf das Bild. */
-    fun importImage(targetDir: File, maxDim: Int = 2000, open: () -> InputStream?): File {
+    fun importImage(
+        targetDir: File,
+        maxDim: Int = 2000,
+        crop: ((Int, Int) -> CropFractions)? = null,
+        open: () -> InputStream?,
+    ): File {
         // 1) Nur die Bildgröße lesen. decodeStream liefert dabei absichtlich kein Bild zurück.
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         val boundsStream = open() ?: throw IOException("Bild konnte nicht geöffnet werden")
         boundsStream.use { BitmapFactory.decodeStream(it, null, bounds) }
-        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) throw IOException("Kein gültiges Bild")
+        val rawWidth = bounds.outWidth
+        val rawHeight = bounds.outHeight
+        if (rawWidth <= 0 || rawHeight <= 0) throw IOException("Kein gültiges Bild")
 
-        // 2) Verkleinert laden.
+        // 2) Drehung aus den Fotodaten und gewünschter Ausschnitt.
+        val rotation = readRotation(open)
+        val sideways = rotation == 90 || rotation == 270
+        val uprightWidth = if (sideways) rawHeight else rawWidth
+        val uprightHeight = if (sideways) rawWidth else rawHeight
+        val wanted = crop?.invoke(uprightWidth, uprightHeight)
+        val fractions = if (wanted != null && wanted.width >= 0.05f && wanted.height >= 0.05f) wanted
+        else CropFractions.FULL
+        val raw = ScanFrame.toRawRect(fractions, rawWidth, rawHeight, rotation)
+
+        // 3) So laden, dass der Ausschnitt noch genug Auflösung für die Texterkennung hat.
         var sample = 1
-        while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= maxDim) sample *= 2
+        while (maxOf(raw.width, raw.height) / (sample * 2) >= maxDim) sample *= 2
         val options = BitmapFactory.Options().apply { inSampleSize = sample }
         val decodeStream = open() ?: throw IOException("Bild konnte nicht geöffnet werden")
         val decoded = decodeStream.use { BitmapFactory.decodeStream(it, null, options) }
             ?: throw IOException("Bild konnte nicht gelesen werden")
 
-        // 3) Drehung aus den Fotodaten übernehmen (fehlt sie, bleibt das Bild wie es ist).
-        val rotation = try {
-            open()?.use { stream ->
-                when (ExifInterface(stream).getAttributeInt(
-                    ExifInterface.TAG_ORIENTATION,
-                    ExifInterface.ORIENTATION_NORMAL,
-                )) {
-                    ExifInterface.ORIENTATION_ROTATE_90 -> 90f
-                    ExifInterface.ORIENTATION_ROTATE_180 -> 180f
-                    ExifInterface.ORIENTATION_ROTATE_270 -> 270f
-                    else -> 0f
-                }
-            } ?: 0f
-        } catch (e: Exception) {
-            0f
-        }
+        val sx = decoded.width.toFloat() / rawWidth
+        val sy = decoded.height.toFloat() / rawHeight
+        val x = (raw.left * sx).toInt().coerceIn(0, decoded.width - 1)
+        val y = (raw.top * sy).toInt().coerceIn(0, decoded.height - 1)
+        val w = Math.round(raw.width * sx).coerceIn(1, decoded.width - x)
+        val h = Math.round(raw.height * sy).coerceIn(1, decoded.height - y)
 
-        val longest = maxOf(decoded.width, decoded.height)
+        // 4) Zuschneiden, verkleinern und aufrichten in einem Schritt.
+        val longest = maxOf(w, h)
         val scale = if (longest > maxDim) maxDim.toFloat() / longest else 1f
         val matrix = Matrix()
         if (scale < 1f) matrix.postScale(scale, scale)
-        if (rotation != 0f) matrix.postRotate(rotation)
-        val upright = if (scale >= 1f && rotation == 0f) decoded
-        else Bitmap.createBitmap(decoded, 0, 0, decoded.width, decoded.height, matrix, true)
+        if (rotation != 0) matrix.postRotate(rotation.toFloat())
+        val whole = x == 0 && y == 0 && w == decoded.width && h == decoded.height
+        val result = if (whole && scale >= 1f && rotation == 0) decoded
+        else Bitmap.createBitmap(decoded, x, y, w, h, matrix, true)
 
-        // 4) Als JPEG in den App-Speicher schreiben.
+        // 5) Als JPEG in den App-Speicher schreiben.
         if (!targetDir.exists() && !targetDir.mkdirs()) throw IOException("Speicherordner fehlt")
         val file = File(targetDir, "${UUID.randomUUID()}.jpg")
         FileOutputStream(file).use { out ->
-            if (!upright.compress(Bitmap.CompressFormat.JPEG, 88, out)) {
+            if (!result.compress(Bitmap.CompressFormat.JPEG, 90, out)) {
                 throw IOException("Bild konnte nicht gespeichert werden")
             }
         }
-        if (upright !== decoded) decoded.recycle()
-        upright.recycle()
+        if (result !== decoded) decoded.recycle()
+        result.recycle()
         return file
+    }
+
+    /** Drehung im Uhrzeigersinn, die das Foto aufrichtet (fehlt die Angabe: 0). */
+    private fun readRotation(open: () -> InputStream?): Int = try {
+        open()?.use { stream ->
+            when (ExifInterface(stream).getAttributeInt(
+                ExifInterface.TAG_ORIENTATION,
+                ExifInterface.ORIENTATION_NORMAL,
+            )) {
+                ExifInterface.ORIENTATION_ROTATE_90 -> 90
+                ExifInterface.ORIENTATION_ROTATE_180 -> 180
+                ExifInterface.ORIENTATION_ROTATE_270 -> 270
+                else -> 0
+            }
+        } ?: 0
+    } catch (e: Exception) {
+        0
     }
 }

@@ -116,15 +116,16 @@ fun DetailScreen(
                 .padding(horizontal = 20.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            CardImage(
-                model = if (showPhoto && photo != null) photo else card.imageUrl(high = true),
-                contentScale = if (showPhoto && photo != null) ContentScale.Crop else ContentScale.Fit,
-                modifier = Modifier
-                    .widthIn(max = 320.dp)
-                    .fillMaxWidth(0.72f)
-                    .aspectRatio(63f / 88f)
-                    .clip(RoundedCornerShape(22.dp)),
-            )
+            val imageModifier = Modifier
+                .widthIn(max = 320.dp)
+                .fillMaxWidth(0.72f)
+                .aspectRatio(63f / 88f)
+                .clip(RoundedCornerShape(22.dp))
+            if (showPhoto && photo != null) {
+                CardImage(model = photo, contentScale = ContentScale.Crop, modifier = imageModifier)
+            } else {
+                CardArt(imageBase = card.imageBase, high = true, modifier = imageModifier)
+            }
             if (photo != null && card.imageBase != null) {
                 Spacer(Modifier.height(12.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

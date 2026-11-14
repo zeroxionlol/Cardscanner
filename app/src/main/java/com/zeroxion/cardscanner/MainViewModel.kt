@@ -12,8 +12,10 @@ import com.zeroxion.cardscanner.data.CollectionStore
 import com.zeroxion.cardscanner.data.TcgDexApi
 import com.zeroxion.cardscanner.scan.CardMatcher
 import com.zeroxion.cardscanner.scan.CardTextParser
+import com.zeroxion.cardscanner.scan.FrameCrop
 import com.zeroxion.cardscanner.scan.ImageUtils
 import com.zeroxion.cardscanner.scan.ParsedCard
+import com.zeroxion.cardscanner.scan.ScanFrame
 import com.zeroxion.cardscanner.scan.TextReader
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -90,14 +92,22 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     // ---------- Scannen ----------
 
-    /** Neues Foto (Kamera oder Galerie): speichern, Text lesen, Karte suchen. */
-    fun onImage(source: Uri) {
+    /**
+     * Neues Foto (Kamera oder Galerie): speichern, Text lesen, Karte suchen.
+     * Mit [frame] wird das Foto auf den gelben Scan-Rahmen zugeschnitten.
+     */
+    fun onImage(source: Uri, frame: FrameCrop? = null) {
         if (_scan.value is ScanState.Working) return
         val app = getApplication<Application>()
         viewModelScope.launch {
             _scan.value = ScanState.Working(null, "Foto wird gespeichert …")
             val photo = try {
-                withContext(Dispatchers.IO) { ImageUtils.importImage(app, source) }
+                withContext(Dispatchers.IO) {
+                    if (frame == null) ImageUtils.importImage(app, source)
+                    else ImageUtils.importImage(app, source) { width, height ->
+                        ScanFrame.toImageFractions(frame.box, frame.viewWidth, frame.viewHeight, width, height)
+                    }
+                }
             } catch (e: Exception) {
                 _scan.value = ScanState.Camera
                 val reason = e.message?.takeIf { it.isNotBlank() } ?: e.javaClass.simpleName
@@ -106,12 +116,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
 
             _scan.value = ScanState.Working(photo, "Text wird gelesen …")
-            val lines = try {
-                TextReader.read(app, photo)
+            val parsed = try {
+                val text = TextReader.read(photo)
+                CardTextParser.parse(text.lines, text.bottomLines)
             } catch (e: Exception) {
-                emptyList()
+                ParsedCard(emptyList(), null, null)
             }
-            val parsed = CardTextParser.parse(lines)
 
             _scan.value = ScanState.Working(photo, "Karte wird gesucht …")
             val lang = _lang.value
@@ -133,6 +143,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 selected = candidates.firstOrNull(),
                 notice = notice,
             )
+            // Ohne lesbare Nummer gibt es oft viele Karten mit demselben Namen:
+            // dann gleich alle zur Auswahl anbieten.
+            val name = parsed.names.firstOrNull()
+            if (found.isSuccess && parsed.localId == null && name != null) search(name, silent = true)
         }
     }
 
@@ -142,7 +156,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Manuelle Suche nach dem Kartennamen. */
-    fun search(query: String) {
+    fun search(query: String, silent: Boolean = false) {
         val state = _scan.value as? ScanState.Result ?: return
         val term = query.trim()
         if (term.length < 2) return
@@ -170,6 +184,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 searching = false,
                 searchResults = result.getOrDefault(emptyList()),
             )
+            if (silent) return@launch
             if (result.isFailure) notify("Suche fehlgeschlagen – keine Verbindung.")
             else if (result.getOrDefault(emptyList()).isEmpty()) notify("Nichts gefunden für „$term“.")
         }
