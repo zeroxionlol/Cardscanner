@@ -90,6 +90,29 @@ class CardTextParserTest {
     }
 
     @Test
+    fun japaneseAndFrenchCards() {
+        val japanese = CardTextParser.parse(
+            listOf(
+                OcrLine("たね イーブイ HP 70", 40, 110),
+                OcrLine("でんこうせっか 20+", 900, 950),
+                OcrLine("SV8a 126/187", 1700, 1722),
+            ),
+        )
+        assertEquals("イーブイ", japanese.names.first())
+        assertEquals("126", japanese.localId)
+        assertEquals(187, japanese.setTotal)
+
+        val twoChars = CardTextParser.parse(listOf(OcrLine("基礎 伊布 HP 70", 40, 110), OcrLine("126/187", 1700, 1722)))
+        assertEquals("伊布", twoChars.names.first())
+
+        val french = CardTextParser.parse(
+            listOf(OcrLine("DE BASE Évoli PV 70", 40, 110), OcrLine("133/165", 1700, 1722)),
+        )
+        assertEquals("Évoli", french.names.first())
+        assertEquals("133", french.localId)
+    }
+
+    @Test
     fun nothingReadable() {
         val parsed = CardTextParser.parse(emptyList())
         assertTrue(parsed.isEmpty)

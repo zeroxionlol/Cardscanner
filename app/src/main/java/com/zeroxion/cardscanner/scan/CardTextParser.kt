@@ -31,9 +31,12 @@ object CardTextParser {
     private val hitPoints =
         Regex("""(?i)\b(?:KP|HP|PV|PS)\s*\d{2,3}\b|\b\d{2,3}\s*(?:KP|HP|PV|PS)\b""")
     private val stage =
-        Regex("""(?i)\b(?:BASIS|BASIC|PHASE\s*\d|STAGE\s*\d|STUFE\s*\d)\b""")
+        Regex("""(?i)\b(?:BASIS|BASIC|DE BASE|BASE|PHASE\s*\d|STAGE\s*\d|STUFE\s*\d|NIVEAU\s*\d)\b""")
+    /** Entwicklungsstufen auf japanischen, koreanischen und chinesischen Karten. */
+    private val asianStage =
+        Regex("""たね|[12１２]\s*進化|기본|[12]\s*진화|基礎|基础|[12一二]\s*[階阶]\s*[進进]化""")
     private val evolves =
-        Regex("""(?i)^\s*(entwickelt sich|evolves from|weiterentwicklung)""")
+        Regex("""(?i)^\s*(entwickelt sich|evolves from|weiterentwicklung|évolution d|evolution d)""")
     private val spaces = Regex("""\s+""")
     private val idPattern = Regex("""^([A-Z]*)0*(\d+)$""")
     private val labels = setOf(
@@ -97,7 +100,7 @@ object CardTextParser {
         val names = pool
             .sortedByDescending { it.height }
             .map { cleanName(it.text) }
-            .filter { name -> name.count { it.isLetter() } >= 3 }
+            .filter { name -> name.count { it.isLetter() } >= minLetters(name) }
             .distinct()
             .take(3)
 
@@ -121,11 +124,15 @@ object CardTextParser {
         } else id
     }
 
+    /** Namen in japanischer, koreanischer oder chinesischer Schrift sind oft nur zwei Zeichen lang. */
+    private fun minLetters(text: String): Int = if (text.any { it.code >= 0x2E80 }) 2 else 3
+
     /** Entfernt KP-Angaben, Entwicklungsstufen und Sonderzeichen aus einer Namenszeile. */
     fun cleanName(raw: String): String {
         if (evolves.containsMatchIn(raw)) return ""
         var s = hitPoints.replace(raw, " ")
         s = stage.replace(s, " ")
+        s = asianStage.replace(s, " ")
         s = buildString {
             for (c in s) {
                 val keep = c.isLetter() || c == '-' || c == '\'' || c == '’' || c == '.' ||
@@ -147,7 +154,7 @@ object CardTextParser {
         val core = words.filterNot { it.lowercase() in suffixes }
         val base = core.joinToString(" ")
         val longest = core.maxByOrNull { it.length } ?: ""
-        return listOf(base, longest, name).filter { it.length >= 3 }.distinct()
+        return listOf(base, longest, name).filter { it.length >= minLetters(it) }.distinct()
     }
 
     /** Vergleicht Kartennummern unabhängig von führenden Nullen und Großschreibung ("004" = "4"). */

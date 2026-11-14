@@ -5,7 +5,11 @@ import android.graphics.BitmapFactory
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.TextRecognizer
+import com.google.mlkit.vision.text.chinese.ChineseTextRecognizerOptions
+import com.google.mlkit.vision.text.japanese.JapaneseTextRecognizerOptions
+import com.google.mlkit.vision.text.korean.KoreanTextRecognizerOptions
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
+import com.zeroxion.cardscanner.data.Script
 import kotlinx.coroutines.suspendCancellableCoroutine
 import java.io.File
 import java.io.IOException
@@ -20,9 +24,15 @@ object TextReader {
     /** Anteil der Bildhöhe, ab dem der untere Rand (Kartennummer) extra gelesen wird. */
     private const val STRIP_START = 0.80f
 
-    suspend fun read(photo: File): CardText {
+    suspend fun read(photo: File, script: Script = Script.LATIN): CardText {
         val bitmap = BitmapFactory.decodeFile(photo.path) ?: throw IOException("Foto nicht lesbar")
-        val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+        // Die Modelle für Japanisch, Koreanisch und Chinesisch lesen lateinische Zeichen und Ziffern mit.
+        val recognizer = when (script) {
+            Script.JAPANESE -> TextRecognition.getClient(JapaneseTextRecognizerOptions.Builder().build())
+            Script.KOREAN -> TextRecognition.getClient(KoreanTextRecognizerOptions.Builder().build())
+            Script.CHINESE -> TextRecognition.getClient(ChineseTextRecognizerOptions.Builder().build())
+            Script.LATIN -> TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+        }
         try {
             val lines = recognize(recognizer, bitmap, 0, 1f)
 

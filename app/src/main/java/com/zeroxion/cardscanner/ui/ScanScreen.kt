@@ -49,6 +49,8 @@ import androidx.compose.material.icons.rounded.PhotoLibrary
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -93,6 +95,7 @@ import com.zeroxion.cardscanner.MainViewModel
 import com.zeroxion.cardscanner.ScanState
 import com.zeroxion.cardscanner.data.CardBrief
 import com.zeroxion.cardscanner.data.CardInfo
+import com.zeroxion.cardscanner.data.ScanLangs
 import com.zeroxion.cardscanner.data.VARIANT_HOLO
 import com.zeroxion.cardscanner.data.VARIANT_NORMAL
 import com.zeroxion.cardscanner.scan.FrameCrop
@@ -242,16 +245,35 @@ private fun CameraPane(vm: MainViewModel, padding: PaddingValues) {
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            Text(
-                text = if (lang == "de") "Karten: DE" else "Karten: EN",
-                style = MaterialTheme.typography.labelLarge,
-                color = Color.White,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(50))
-                    .background(Color.White.copy(alpha = 0.18f))
-                    .clickable { vm.toggleLang() }
-                    .padding(horizontal = 14.dp, vertical = 8.dp),
-            )
+            Box {
+                var menuOpen by remember { mutableStateOf(false) }
+                Text(
+                    text = "Karten: ${ScanLangs.byCode(lang).label} ▾",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = Color.White,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(Color.White.copy(alpha = 0.18f))
+                        .clickable { menuOpen = true }
+                        .padding(horizontal = 14.dp, vertical = 8.dp),
+                )
+                DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                    ScanLangs.all.forEach { option ->
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    "${option.label} · ${option.title}",
+                                    fontWeight = if (option.code == lang) FontWeight.Bold else FontWeight.Normal,
+                                )
+                            },
+                            onClick = {
+                                menuOpen = false
+                                vm.setLang(option.code)
+                            },
+                        )
+                    }
+                }
+            }
         }
 
         // Bedienleiste

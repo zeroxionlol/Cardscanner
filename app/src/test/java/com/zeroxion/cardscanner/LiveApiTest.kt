@@ -56,6 +56,33 @@ class LiveApiTest {
         println("LIVE card sv03-125 de: $newer")
     }
 
+    /** Zeigt, was die Datenbank für die übrigen Scan-Sprachen liefert (Sets, Karten, Preise). */
+    @Test
+    fun otherScanLanguages() = runBlocking {
+        for (lang in listOf("fr", "ja", "ko", "zh-tw", "zh-cn")) {
+            val asian = com.zeroxion.cardscanner.data.ScanLangs.isAsian(lang)
+            val sets = runCatching { TcgDexApi.sets(lang) }.getOrDefault(emptyList())
+            val probe = if (asian) sets.filter { it.official > 20 }.takeLast(3) else sets.filter { it.id == "sv03" }
+            var withCards = 0
+            var withPrice = 0
+            var sample = ""
+            var matched = ""
+            for (set in probe) {
+                val cards = runCatching { TcgDexApi.setCards(lang, set.id) }.getOrDefault(emptyList())
+                val brief = cards.getOrNull(cards.size / 2) ?: continue
+                withCards++
+                val card = runCatching { TcgDexApi.card(lang, brief.id) }.getOrNull() ?: continue
+                if (card.hasNormal || card.hasHolo) withPrice++
+                sample = "${card.id} ${card.name} ${card.numberLabel} trend=${card.prices(card.defaultVariant)?.headline} image=${card.imageBase != null}"
+                val total = card.officialCount ?: continue
+                val found = CardMatcher.find(ParsedCard(listOf(card.name), card.localId, total), lang)
+                matched = "${found.firstOrNull()?.id} (erwartet ${card.id})"
+            }
+            println("LIVE lang=$lang sets=${sets.size} probe=${probe.map { it.id }} mitKarten=$withCards mitPreis=$withPrice sample=[$sample] matcher=[$matched]")
+        }
+        assertTrue(TcgDexApi.sets("ja").isNotEmpty())
+    }
+
     @Test
     fun unknownCardIsNull() {
         assertEquals(null, TcgDexApi.card("en", "gibtesnicht-999"))

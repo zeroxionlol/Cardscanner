@@ -2,6 +2,7 @@ package com.zeroxion.cardscanner.scan
 
 import com.zeroxion.cardscanner.data.CardBrief
 import com.zeroxion.cardscanner.data.CardInfo
+import com.zeroxion.cardscanner.data.ScanLangs
 import com.zeroxion.cardscanner.data.TcgDexApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -17,7 +18,7 @@ object CardMatcher {
 
     private fun searchBoth(lang: String, term: String): List<CardBrief> {
         val local = TcgDexApi.searchByName(lang, term)
-        if (local.isNotEmpty() || lang == "en") return local
+        if (local.isNotEmpty() || lang == "en" || ScanLangs.isAsian(lang)) return local
         return TcgDexApi.searchByName("en", term)
     }
 
@@ -30,19 +31,21 @@ object CardMatcher {
         }
 
         val localId = parsed.localId
+        val asian = ScanLangs.isAsian(lang)
         val setTotal = parsed.setTotal
 
         // 1) Nummer + Setgröße ("136/189") grenzen das Set meist eindeutig ein.
         if (localId != null && setTotal != null) {
             val digital = TcgDexApi.digitalSetIds()
-            val sets = TcgDexApi.sets()
+            // Asiatische Karten haben eigene Sets; westliche teilen sich die englische Set-Liste.
+            val sets = TcgDexApi.sets(if (asian) lang else "en")
                 .filter { it.official == setTotal || it.total == setTotal }
                 .filterNot { it.id.lowercase() in digital }
                 .take(8)
             sets.map { set ->
                 async(Dispatchers.IO) {
                     val cards = TcgDexApi.setCards(lang, set.id)
-                    if (cards.isEmpty() && lang != "en") TcgDexApi.setCards("en", set.id) else cards
+                    if (cards.isEmpty() && lang != "en" && !asian) TcgDexApi.setCards("en", set.id) else cards
                 }
             }.awaitAll().flatten()
                 .filter { CardTextParser.sameLocalId(it.localId, localId) }

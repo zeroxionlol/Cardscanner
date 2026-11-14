@@ -75,6 +75,8 @@ fun DetailScreen(
     item: CollectionItem,
     padding: PaddingValues,
     onBack: () -> Unit,
+    /** z. B. "3 / 12", wenn zwischen mehreren Karten gewischt werden kann. */
+    position: String? = null,
 ) {
     val context = LocalContext.current
     val refreshingUid by vm.refreshingOne.collectAsStateWithLifecycle()
@@ -101,7 +103,15 @@ fun DetailScreen(
             IconButton(onClick = onBack) {
                 Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Zurück")
             }
-            Spacer(Modifier.weight(1f))
+            Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                if (position != null) {
+                    Text(
+                        position,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
             IconButton(onClick = { confirmDelete = true }) {
                 Icon(
                     Icons.Rounded.Delete,

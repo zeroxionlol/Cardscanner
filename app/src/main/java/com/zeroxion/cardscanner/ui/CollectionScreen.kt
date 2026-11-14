@@ -74,7 +74,8 @@ private const val SORT_NAME = 2
 fun CollectionScreen(
     vm: MainViewModel,
     padding: PaddingValues,
-    onOpen: (String) -> Unit,
+    /** Geöffnete Karte und die gerade angezeigte Reihenfolge (zum Wischen zwischen Karten). */
+    onOpen: (String, List<String>) -> Unit,
     onScan: () -> Unit,
 ) {
     val items by vm.items.collectAsStateWithLifecycle()
@@ -217,7 +218,7 @@ fun CollectionScreen(
             }
 
             items(shown, key = { it.uid }) { item ->
-                CardTile(item = item, onClick = { onOpen(item.uid) })
+                CardTile(item = item, onClick = { onOpen(item.uid, shown.map { it.uid }) })
             }
         }
     }

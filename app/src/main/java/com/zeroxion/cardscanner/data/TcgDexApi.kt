@@ -18,7 +18,7 @@ object TcgDexApi {
     class ApiException(message: String, cause: Throwable? = null) : Exception(message, cause)
 
     @Volatile
-    private var setCache: List<SetBrief>? = null
+    private var setCache: Map<String, List<SetBrief>> = emptyMap()
 
     private fun httpGet(url: String): String? {
         val conn = URL(url).openConnection() as HttpURLConnection
@@ -66,9 +66,9 @@ object TcgDexApi {
     }
 
     /** Alle Sets mit ihrer Kartenanzahl (einmal geladen, dann im Speicher). */
-    fun sets(): List<SetBrief> {
-        setCache?.let { return it }
-        val body = httpGet("$BASE/en/sets") ?: return emptyList()
+    fun sets(lang: String = "en"): List<SetBrief> {
+        setCache[lang]?.let { return it }
+        val body = httpGet("$BASE/$lang/sets") ?: return emptyList()
         val array = JSONArray(body)
         val out = ArrayList<SetBrief>(array.length())
         for (i in 0 until array.length()) {
@@ -82,7 +82,7 @@ object TcgDexApi {
                 total = count?.optInt("total", -1) ?: -1,
             )
         }
-        setCache = out
+        setCache = setCache + (lang to out)
         return out
     }
 

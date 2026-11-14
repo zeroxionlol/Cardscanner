@@ -10,6 +10,7 @@ import com.zeroxion.cardscanner.data.CardGroup
 import com.zeroxion.cardscanner.data.CardInfo
 import com.zeroxion.cardscanner.data.CollectionItem
 import com.zeroxion.cardscanner.data.CollectionStore
+import com.zeroxion.cardscanner.data.ScanLangs
 import com.zeroxion.cardscanner.data.TcgDexApi
 import com.zeroxion.cardscanner.scan.CardMatcher
 import com.zeroxion.cardscanner.scan.CardTextParser
@@ -124,8 +125,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _messages.tryEmit(text)
     }
 
-    fun toggleLang() {
-        val next = if (_lang.value == "de") "en" else "de"
+    fun setLang(code: String) {
+        val next = ScanLangs.byCode(code).code
         _lang.value = next
         prefs.edit().putString("lang", next).apply()
     }
@@ -157,17 +158,24 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
             _scan.value = ScanState.Working(photo, "Text wird gelesen …")
             val parsed = try {
-                val text = TextReader.read(photo)
+                val text = TextReader.read(photo, ScanLangs.byCode(_lang.value).script)
                 CardTextParser.parse(text.lines, text.bottomLines)
             } catch (e: Exception) {
                 ParsedCard(emptyList(), null, null)
             }
 
             _scan.value = ScanState.Working(photo, "Karte wird gesucht …")
-            val lang = _lang.value
+            val scanLang = ScanLangs.byCode(_lang.value)
             val found = runCatching {
                 if (parsed.isEmpty) emptyList()
-                else withContext(Dispatchers.IO) { CardMatcher.find(parsed, lang) }
+                else withContext(Dispatchers.IO) {
+                    var hits = emptyList<CardInfo>()
+                    for (apiLang in scanLang.apiLangs) {
+                        hits = CardMatcher.find(parsed, apiLang)
+                        if (hits.isNotEmpty()) break
+                    }
+                    hits
+                }
             }
             val candidates = found.getOrDefault(emptyList())
             val notice = when {
@@ -200,17 +208,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val state = _scan.value as? ScanState.Result ?: return
         val term = query.trim()
         if (term.length < 2) return
-        val lang = _lang.value
+        val langs = ScanLangs.byCode(_lang.value).searchLangs
         _scan.value = state.copy(searching = true)
         viewModelScope.launch {
             val result = runCatching {
                 withContext(Dispatchers.IO) {
-                    val other = if (lang == "de") "en" else "de"
                     var hits = emptyList<CardBrief>()
-                    for (candidate in CardTextParser.searchTerms(term).ifEmpty { listOf(term) }) {
-                        hits = TcgDexApi.searchByName(lang, candidate)
-                        if (hits.isEmpty()) hits = TcgDexApi.searchByName(other, candidate)
-                        if (hits.isNotEmpty()) break
+                    search@ for (candidate in CardTextParser.searchTerms(term).ifEmpty { listOf(term) }) {
+                        for (apiLang in langs) {
+                            hits = TcgDexApi.searchByName(apiLang, candidate)
+                            if (hits.isNotEmpty()) break@search
+                        }
                     }
                     // Neueste zuerst, dann nach Ähnlichkeit zum Suchbegriff.
                     hits.distinctBy { it.id }
@@ -233,10 +241,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** Treffer aus der manuellen Suche übernehmen (lädt Details und Preise nach). */
     fun pickSearchResult(brief: CardBrief) {
         val state = _scan.value as? ScanState.Result ?: return
-        val lang = _lang.value
+        val langs = ScanLangs.byCode(_lang.value).searchLangs
         _scan.value = state.copy(searching = true)
         viewModelScope.launch {
-            val card = runCatching { withContext(Dispatchers.IO) { TcgDexApi.card(lang, brief.id) } }.getOrNull()
+            val card = runCatching {
+                withContext(Dispatchers.IO) { langs.firstNotNullOfOrNull { TcgDexApi.card(it, brief.id) } }
+            }.getOrNull()
             val current = _scan.value as? ScanState.Result ?: return@launch
             if (card == null) {
                 _scan.value = current.copy(searching = false)

@@ -8,6 +8,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.PhotoCamera
 import androidx.compose.material.icons.rounded.Style
@@ -58,6 +60,8 @@ private const val TAB_SCAN = 1
 fun CardscannerApp(vm: MainViewModel = viewModel()) {
     var tab by rememberSaveable { mutableStateOf(TAB_COLLECTION) }
     var detailUid by rememberSaveable { mutableStateOf<String?>(null) }
+    // Reihenfolge der Karten, wie sie beim Öffnen in der Sammlung standen – darin wird gewischt.
+    var detailOrder by rememberSaveable { mutableStateOf(ArrayList<String>()) }
     val items by vm.items.collectAsStateWithLifecycle()
     val scan by vm.scan.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
@@ -67,6 +71,10 @@ fun CardscannerApp(vm: MainViewModel = viewModel()) {
     }
 
     val detailItem = detailUid?.let { uid -> items.firstOrNull { it.uid == uid } }
+    val detailItems = remember(items, detailOrder, detailItem) {
+        val ordered = detailOrder.mapNotNull { id -> items.firstOrNull { it.uid == id } }
+        if (detailItem != null && ordered.none { it.uid == detailItem.uid }) listOf(detailItem) else ordered
+    }
 
     BackHandler(enabled = detailItem != null) { detailUid = null }
     BackHandler(enabled = detailItem == null && tab == TAB_SCAN) {
@@ -104,12 +112,26 @@ fun CardscannerApp(vm: MainViewModel = viewModel()) {
     ) { padding ->
         Box(Modifier.fillMaxSize()) {
             when {
-                detailItem != null -> DetailScreen(
-                    vm = vm,
-                    item = detailItem,
-                    padding = padding,
-                    onBack = { detailUid = null },
-                )
+                detailItem != null -> {
+                    val start = detailItems.indexOfFirst { it.uid == detailItem.uid }.coerceAtLeast(0)
+                    val pagerState = rememberPagerState(initialPage = start) { detailItems.size }
+                    HorizontalPager(
+                        state = pagerState,
+                        modifier = Modifier.fillMaxSize(),
+                        key = { page -> detailItems.getOrNull(page)?.uid ?: page },
+                    ) { page ->
+                        val pageItem = detailItems.getOrNull(page)
+                        if (pageItem != null) {
+                            DetailScreen(
+                                vm = vm,
+                                item = pageItem,
+                                padding = padding,
+                                onBack = { detailUid = null },
+                                position = if (detailItems.size > 1) "${page + 1} / ${detailItems.size}" else null,
+                            )
+                        }
+                    }
+                }
 
                 tab == TAB_SCAN -> ScanScreen(
                     vm = vm,
@@ -119,7 +141,10 @@ fun CardscannerApp(vm: MainViewModel = viewModel()) {
                 else -> CollectionScreen(
                     vm = vm,
                     padding = padding,
-                    onOpen = { detailUid = it },
+                    onOpen = { uid, order ->
+                        detailOrder = ArrayList(order)
+                        detailUid = uid
+                    },
                     onScan = { tab = TAB_SCAN },
                 )
             }
