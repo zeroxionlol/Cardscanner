@@ -6,6 +6,7 @@ import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.zeroxion.cardscanner.data.CardBrief
+import com.zeroxion.cardscanner.data.CardGroup
 import com.zeroxion.cardscanner.data.CardInfo
 import com.zeroxion.cardscanner.data.CollectionItem
 import com.zeroxion.cardscanner.data.CollectionStore
@@ -76,8 +77,47 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 8)
     val messages: SharedFlow<String> = _messages
 
+    /** Eigene Sets des Nutzers. */
+    val groups: StateFlow<List<CardGroup>> = store.groups
+
+    private val _scanGroupId = MutableStateFlow(prefs.getString("scanGroup", null))
+    /** Set, in das neu gescannte Karten gelegt werden (bleibt für die nächsten Scans gewählt). */
+    val scanGroupId: StateFlow<String?> = _scanGroupId
+
     init {
         viewModelScope.launch { store.load() }
+    }
+
+    // ---------- Eigene Sets ----------
+
+    fun setScanGroup(id: String?) {
+        _scanGroupId.value = id
+        prefs.edit().putString("scanGroup", id).apply()
+    }
+
+    fun createGroup(name: String, onCreated: (String) -> Unit = {}) {
+        if (name.isBlank()) return
+        viewModelScope.launch {
+            val group = store.addGroup(name)
+            onCreated(group.id)
+        }
+    }
+
+    fun renameGroup(id: String, name: String) {
+        if (name.isBlank()) return
+        viewModelScope.launch { store.renameGroup(id, name) }
+    }
+
+    fun deleteGroup(id: String) {
+        viewModelScope.launch {
+            store.removeGroup(id)
+            if (_scanGroupId.value == id) setScanGroup(null)
+        }
+    }
+
+    /** Karte einem Set zuordnen (null = kein Set). */
+    fun setGroup(uid: String, groupId: String?) {
+        viewModelScope.launch { store.update(uid) { it.copy(groupId = groupId) } }
     }
 
     fun notify(text: String) {
@@ -212,6 +252,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val state = _scan.value as? ScanState.Result ?: return
         val card = state.selected ?: return
         val now = System.currentTimeMillis()
+        val group = store.groups.value.firstOrNull { it.id == _scanGroupId.value }
         viewModelScope.launch {
             store.add(
                 CollectionItem(
@@ -222,10 +263,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     quantity = 1,
                     addedAt = now,
                     refreshedAt = now,
+                    groupId = group?.id,
                 ),
             )
             _scan.value = ScanState.Camera
-            notify("${card.name} wurde zur Sammlung hinzugefügt.")
+            notify(
+                if (group != null) "${card.name} wurde zu „${group.name}“ hinzugefügt."
+                else "${card.name} wurde zur Sammlung hinzugefügt.",
+            )
         }
     }
 

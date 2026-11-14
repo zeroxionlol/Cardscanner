@@ -10,6 +10,7 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.util.UUID
 
 /** Die Sammlung liegt als JSON-Datei im privaten App-Speicher, die Fotos daneben im Ordner "photos". */
 class CollectionStore(context: Context) {
@@ -18,8 +19,73 @@ class CollectionStore(context: Context) {
     private val _items = MutableStateFlow<List<CollectionItem>>(emptyList())
     val items: StateFlow<List<CollectionItem>> = _items
 
+    /** Eigene Sets des Nutzers, in der Reihenfolge, in der sie angelegt wurden. */
+    private val groupFile = File(context.filesDir, "sets.json")
+    private val _groups = MutableStateFlow<List<CardGroup>>(emptyList())
+    val groups: StateFlow<List<CardGroup>> = _groups
+
     suspend fun load() = withContext(Dispatchers.IO) {
-        mutex.withLock { _items.value = read() }
+        mutex.withLock {
+            _groups.value = readGroups()
+            _items.value = read()
+        }
+    }
+
+    /** Legt ein Set an; gibt es den Namen schon, wird das vorhandene zurückgegeben. */
+    suspend fun addGroup(name: String): CardGroup = withContext(Dispatchers.IO) {
+        mutex.withLock {
+            val clean = name.trim()
+            val existing = _groups.value.firstOrNull { it.name.equals(clean, ignoreCase = true) }
+            if (existing != null) existing
+            else {
+                val group = CardGroup(UUID.randomUUID().toString(), clean)
+                val next = _groups.value + group
+                _groups.value = next
+                writeGroups(next)
+                group
+            }
+        }
+    }
+
+    suspend fun renameGroup(id: String, name: String) = withContext(Dispatchers.IO) {
+        mutex.withLock {
+            val next = _groups.value.map { if (it.id == id) it.copy(name = name.trim()) else it }
+            _groups.value = next
+            writeGroups(next)
+        }
+    }
+
+    /** Löscht ein Set. Die Karten bleiben in der Sammlung, nur ohne Set. */
+    suspend fun removeGroup(id: String) = withContext(Dispatchers.IO) {
+        mutex.withLock {
+            val nextGroups = _groups.value.filterNot { it.id == id }
+            val nextItems = _items.value.map { if (it.groupId == id) it.copy(groupId = null) else it }
+            _groups.value = nextGroups
+            _items.value = nextItems
+            writeGroups(nextGroups)
+            write(nextItems)
+        }
+    }
+
+    private fun readGroups(): List<CardGroup> {
+        if (!groupFile.exists()) return emptyList()
+        return try {
+            val array = JSONArray(groupFile.readText())
+            (0 until array.length()).mapNotNull { i ->
+                val o = array.optJSONObject(i) ?: return@mapNotNull null
+                val id = o.str("id") ?: return@mapNotNull null
+                val name = o.str("name") ?: return@mapNotNull null
+                CardGroup(id, name)
+            }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    private fun writeGroups(groups: List<CardGroup>) {
+        val array = JSONArray()
+        groups.forEach { array.put(JSONObject().put("id", it.id).put("name", it.name)) }
+        groupFile.writeText(array.toString())
     }
 
     suspend fun add(item: CollectionItem) = mutate { listOf(item) + it }
@@ -113,6 +179,7 @@ class CollectionStore(context: Context) {
         o.put("addedAt", item.addedAt)
         o.put("refreshedAt", item.refreshedAt)
         item.photoPath?.let { o.put("photoPath", it) }
+        item.groupId?.let { o.put("groupId", it) }
         o.put("cardId", c.id)
         o.put("lang", c.lang)
         o.put("name", c.name)
@@ -155,6 +222,7 @@ class CollectionStore(context: Context) {
             quantity = o.optInt("quantity", 1).coerceAtLeast(1),
             addedAt = o.optLong("addedAt", 0L),
             refreshedAt = o.optLong("refreshedAt", 0L),
+            groupId = o.str("groupId"),
         )
     }
 }

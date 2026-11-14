@@ -69,6 +69,12 @@ data class SetBrief(
     val total: Int,
 )
 
+/** Ein eigenes Set des Nutzers, z. B. "Lenas Karten". */
+data class CardGroup(
+    val id: String,
+    val name: String,
+)
+
 data class CollectionItem(
     val uid: String,
     val card: CardInfo,
@@ -77,6 +83,8 @@ data class CollectionItem(
     val quantity: Int,
     val addedAt: Long,
     val refreshedAt: Long,
+    /** Eigenes Set, dem die Karte zugeordnet ist (oder keines). */
+    val groupId: String? = null,
 ) {
     val unitPrice: Double? get() = card.prices(variant)?.headline
     val totalPrice: Double get() = (unitPrice ?: 0.0) * quantity

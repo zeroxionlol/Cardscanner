@@ -78,6 +78,7 @@ fun DetailScreen(
 ) {
     val context = LocalContext.current
     val refreshingUid by vm.refreshingOne.collectAsStateWithLifecycle()
+    val groups by vm.groups.collectAsStateWithLifecycle()
     val photo = remember(item.photoPath) { item.photoPath?.let { File(it) }?.takeIf { it.exists() } }
     var showPhoto by remember(item.uid) { mutableStateOf(photo != null) }
     var confirmDelete by remember { mutableStateOf(false) }
@@ -189,6 +190,19 @@ fun DetailScreen(
             }
 
             Spacer(Modifier.height(14.dp))
+            Text(
+                "Set",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            GroupPicker(
+                groups = groups,
+                selectedId = item.groupId,
+                onSelect = { vm.setGroup(item.uid, it) },
+                onCreate = { name -> vm.createGroup(name) { id -> vm.setGroup(item.uid, id) } },
+            )
+
+            Spacer(Modifier.height(10.dp))
             Row(
                 modifier = Modifier
                     .fillMaxWidth()

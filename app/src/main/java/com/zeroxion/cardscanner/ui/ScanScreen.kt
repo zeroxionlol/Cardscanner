@@ -437,6 +437,8 @@ private fun ResultPane(vm: MainViewModel, state: ScanState.Result, padding: Padd
     val keyboard = LocalSoftwareKeyboardController.current
     val selected = state.selected
     var variant by remember(selected?.id) { mutableStateOf(selected?.defaultVariant ?: VARIANT_NORMAL) }
+    val groups by vm.groups.collectAsStateWithLifecycle()
+    val scanGroupId by vm.scanGroupId.collectAsStateWithLifecycle()
     var query by rememberSaveable(state.photo.path) { mutableStateOf(state.parsed.names.firstOrNull() ?: "") }
 
     Column(
@@ -575,6 +577,20 @@ private fun ResultPane(vm: MainViewModel, state: ScanState.Result, padding: Padd
                                 shape = RoundedCornerShape(50),
                             )
                         }
+                    }
+                }
+            }
+
+            if (selected != null) {
+                item {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("In welches Set?", style = MaterialTheme.typography.titleSmall)
+                        GroupPicker(
+                            groups = groups,
+                            selectedId = scanGroupId,
+                            onSelect = { vm.setScanGroup(it) },
+                            onCreate = { name -> vm.createGroup(name) { id -> vm.setScanGroup(id) } },
+                        )
                     }
                 }
             }
