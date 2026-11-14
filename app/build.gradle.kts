@@ -57,6 +57,13 @@ android {
     buildFeatures {
         compose = true
     }
+    testOptions {
+        unitTests.all {
+            it.testLogging {
+                showStandardStreams = true
+            }
+        }
+    }
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
@@ -93,4 +100,6 @@ dependencies {
     implementation("io.coil-kt:coil-compose:2.7.0")
 
     testImplementation("junit:junit:4.13.2")
+    // Echte JSON-Implementierung für Tests (auf dem Gerät bringt Android sie mit)
+    testImplementation("org.json:json:20240303")
 }
