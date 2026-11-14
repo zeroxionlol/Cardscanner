@@ -58,6 +58,7 @@ android {
         compose = true
     }
     testOptions {
+        unitTests.isIncludeAndroidResources = true
         unitTests.all {
             it.testLogging {
                 showStandardStreams = true
@@ -102,4 +103,6 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     // Echte JSON-Implementierung für Tests (auf dem Gerät bringt Android sie mit)
     testImplementation("org.json:json:20240303")
+    // Android-Klassen (Bilder, Dateien) im Test ausführbar machen
+    testImplementation("org.robolectric:robolectric:4.14.1")
 }
