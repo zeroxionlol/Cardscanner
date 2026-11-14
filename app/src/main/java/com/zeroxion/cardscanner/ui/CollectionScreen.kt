@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items as rowItems
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -164,7 +165,7 @@ fun CollectionScreen(
                 item(key = "all") {
                     SetChip("Alle · ${items.size}", selected = activeGroup == null, onClick = { groupFilter = null })
                 }
-                items(groups, key = { it.id }) { group ->
+                rowItems(groups, key = { it.id }) { group ->
                     val count = items.count { it.groupId == group.id }
                     SetChip(
                         "${group.name} · $count",
