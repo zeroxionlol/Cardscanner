@@ -7,8 +7,10 @@ import android.graphics.Matrix
 import android.media.ExifInterface
 import android.net.Uri
 import java.io.File
+import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.IOException
+import java.io.InputStream
 import java.util.UUID
 
 object ImageUtils {
@@ -17,21 +19,34 @@ object ImageUtils {
      * und auf eine handliche Größe verkleinert, damit Sammlung und Texterkennung schnell bleiben.
      */
     fun importImage(context: Context, source: Uri, maxDim: Int = 2000): File {
-        val resolver = context.contentResolver
+        val dir = File(context.filesDir, "photos")
+        val path = source.path
+        return if (source.scheme == "file" && path != null) {
+            importImage(dir, maxDim) { FileInputStream(path) }
+        } else {
+            importImage(dir, maxDim) { context.contentResolver.openInputStream(source) }
+        }
+    }
 
+    /** Kern der Verarbeitung; [open] liefert bei jedem Aufruf einen frischen Stream auf das Bild. */
+    fun importImage(targetDir: File, maxDim: Int = 2000, open: () -> InputStream?): File {
+        // 1) Nur die Bildgröße lesen. decodeStream liefert dabei absichtlich kein Bild zurück.
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        resolver.openInputStream(source)?.use { BitmapFactory.decodeStream(it, null, bounds) }
-            ?: throw IOException("Bild konnte nicht geöffnet werden")
+        val boundsStream = open() ?: throw IOException("Bild konnte nicht geöffnet werden")
+        boundsStream.use { BitmapFactory.decodeStream(it, null, bounds) }
         if (bounds.outWidth <= 0 || bounds.outHeight <= 0) throw IOException("Kein gültiges Bild")
 
+        // 2) Verkleinert laden.
         var sample = 1
         while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= maxDim) sample *= 2
         val options = BitmapFactory.Options().apply { inSampleSize = sample }
-        val decoded = resolver.openInputStream(source)?.use { BitmapFactory.decodeStream(it, null, options) }
+        val decodeStream = open() ?: throw IOException("Bild konnte nicht geöffnet werden")
+        val decoded = decodeStream.use { BitmapFactory.decodeStream(it, null, options) }
             ?: throw IOException("Bild konnte nicht gelesen werden")
 
+        // 3) Drehung aus den Fotodaten übernehmen (fehlt sie, bleibt das Bild wie es ist).
         val rotation = try {
-            resolver.openInputStream(source)?.use { stream ->
+            open()?.use { stream ->
                 when (ExifInterface(stream).getAttributeInt(
                     ExifInterface.TAG_ORIENTATION,
                     ExifInterface.ORIENTATION_NORMAL,
@@ -51,12 +66,17 @@ object ImageUtils {
         val matrix = Matrix()
         if (scale < 1f) matrix.postScale(scale, scale)
         if (rotation != 0f) matrix.postRotate(rotation)
-        val upright = if (matrix.isIdentity) decoded
+        val upright = if (scale >= 1f && rotation == 0f) decoded
         else Bitmap.createBitmap(decoded, 0, 0, decoded.width, decoded.height, matrix, true)
 
-        val dir = File(context.filesDir, "photos").apply { mkdirs() }
-        val file = File(dir, "${UUID.randomUUID()}.jpg")
-        FileOutputStream(file).use { upright.compress(Bitmap.CompressFormat.JPEG, 88, it) }
+        // 4) Als JPEG in den App-Speicher schreiben.
+        if (!targetDir.exists() && !targetDir.mkdirs()) throw IOException("Speicherordner fehlt")
+        val file = File(targetDir, "${UUID.randomUUID()}.jpg")
+        FileOutputStream(file).use { out ->
+            if (!upright.compress(Bitmap.CompressFormat.JPEG, 88, out)) {
+                throw IOException("Bild konnte nicht gespeichert werden")
+            }
+        }
         if (upright !== decoded) decoded.recycle()
         upright.recycle()
         return file

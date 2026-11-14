@@ -100,7 +100,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 withContext(Dispatchers.IO) { ImageUtils.importImage(app, source) }
             } catch (e: Exception) {
                 _scan.value = ScanState.Camera
-                notify("Das Foto konnte nicht verarbeitet werden.")
+                val reason = e.message?.takeIf { it.isNotBlank() } ?: e.javaClass.simpleName
+                notify("Das Foto konnte nicht verarbeitet werden ($reason).")
                 return@launch
             }
 
