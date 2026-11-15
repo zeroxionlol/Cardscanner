@@ -16,7 +16,8 @@ zeigt den aktuellen Cardmarket-Preis und speichert Foto und Karte in deiner Samm
 - **Kategorien** – Eigene Kategorien (z. B. „Lenas Karten“). Oben in der Kamera wählst du per
   Dropdown, in welche Kategorie die nächsten Scans kommen.
 - **Farbwelten** – Klassik, Feuer, Wasser, Pflanze, Elektro oder Psycho: über das Paletten-Symbol
-  auf der Wert-Kachel umschalten, die ganze App färbt sich um.
+  auf der Wert-Kachel umschalten. Die App färbt sich um und zeigt animierte Motive im Hintergrund
+  (Wellen und Blasen, Flammen und Funken, Gras und Blätter, Blitze, Wellenringe, Glitzer).
 - **Binder** – Binder mit eigenem Coverfoto aus der Galerie und 2 × 2, 3 × 3 oder 4 × 3 Taschen
   pro Seite. Eine leere Tasche antippen und eine Karte aus der Sammlung einstecken; lange drücken
   zum Verschieben, Seiten hinzufügen und entfernen.
