@@ -23,6 +23,9 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
 
       - name: Tests und APK
+        env:
+          # Rendert nebenbei die gemalten Typ-Motive als Bilder (Artefakt "vorschau").
+          PREVIEW: "1"
         run: |
           chmod +x gradlew
           ./gradlew --no-daemon testDebugUnitTest assembleDebug
@@ -32,6 +35,13 @@ jobs:
         with:
           name: cardscanner-apk
           path: app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Vorschaubilder der Motive
+        uses: actions/upload-artifact@v4
+        with:
+          name: vorschau
+          path: app/build/previews/*.png
+          if-no-files-found: ignore
 
       - name: Release "latest" aktualisieren
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'

@@ -21,7 +21,7 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import java.io.File
 
-/** Rendert die Typ-Motive als PNG (nur im Workflow "Vorschau"). */
+/** Rendert die Typ-Motive als PNG (im Build-Workflow als Artefakt "vorschau"). */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
