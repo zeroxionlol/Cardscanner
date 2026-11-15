@@ -123,7 +123,7 @@ fun PricePill(text: String, modifier: Modifier = Modifier) {
         style = MaterialTheme.typography.labelLarge,
         modifier = modifier
             .clip(RoundedCornerShape(50))
-            .background(Brush.verticalGradient(listOf(Color(0xFFFFE27A), Gold)))
+            .background(AccentBrush)
             .padding(horizontal = 10.dp, vertical = 4.dp),
     )
 }

@@ -4,6 +4,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -31,6 +32,7 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.PhotoCamera
+import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.AlertDialog
@@ -89,6 +91,8 @@ fun CollectionScreen(
     var creating by remember { mutableStateOf(false) }
     var renaming by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf(false) }
+    var pickingTheme by remember { mutableStateOf(false) }
+    val typeTheme by vm.typeTheme.collectAsStateWithLifecycle()
 
     val activeGroup = groups.firstOrNull { it.id == groupFilter }
     val inGroup = remember(items, activeGroup) {
@@ -133,6 +137,7 @@ fun CollectionScreen(
                             items = inGroup,
                             refresh = refresh,
                             onRefresh = vm::refreshAll,
+                            onTheme = { pickingTheme = true },
                             modifier = Modifier.weight(1f),
                         )
                         Column(
@@ -150,6 +155,7 @@ fun CollectionScreen(
                             items = inGroup,
                             refresh = refresh,
                             onRefresh = vm::refreshAll,
+                            onTheme = { pickingTheme = true },
                             modifier = Modifier.fillMaxWidth(),
                         )
                         SearchField(query = query, onChange = { query = it })
@@ -223,6 +229,14 @@ fun CollectionScreen(
                 CardTile(item = item, onClick = { onOpen(item.uid, shown.map { it.uid }) })
             }
         }
+    }
+
+    if (pickingTheme) {
+        ThemePickerSheet(
+            current = typeTheme,
+            onPick = { vm.setTypeTheme(it) },
+            onDismiss = { pickingTheme = false },
+        )
     }
 
     if (creating) {
@@ -336,6 +350,7 @@ private fun ValueHero(
     items: List<CollectionItem>,
     refresh: RefreshState,
     onRefresh: () -> Unit,
+    onTheme: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val total = items.sumOf { it.totalPrice }
@@ -354,13 +369,33 @@ private fun ValueHero(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
-            Text(
-                text = (title ?: "Meine Sammlung").uppercase(),
-                style = MaterialTheme.typography.labelSmall,
-                color = Color.White.copy(alpha = 0.85f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = (title ?: "Meine Sammlung").uppercase(),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.White.copy(alpha = 0.85f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                Spacer(Modifier.width(8.dp))
+                Box(
+                    modifier = Modifier
+                        .size(28.dp)
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.18f))
+                        .border(1.dp, Color.White.copy(alpha = 0.4f), CircleShape)
+                        .clickable(onClick = onTheme),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        Icons.Rounded.Palette,
+                        contentDescription = "Farbwelt wählen",
+                        tint = Color.White,
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
+            }
             Text(
                 text = if (total > 0.0) formatEuro(total) else "0,00 €",
                 style = MaterialTheme.typography.headlineMedium,

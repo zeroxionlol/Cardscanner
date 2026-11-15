@@ -11,6 +11,7 @@ import com.zeroxion.cardscanner.data.CardBrief
 import com.zeroxion.cardscanner.data.CardGroup
 import com.zeroxion.cardscanner.data.CardInfo
 import com.zeroxion.cardscanner.data.PullRate
+import com.zeroxion.cardscanner.ui.TypeTheme
 import com.zeroxion.cardscanner.data.CollectionItem
 import com.zeroxion.cardscanner.data.CollectionStore
 import com.zeroxion.cardscanner.data.PullRates
@@ -80,6 +81,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _refreshingOne = MutableStateFlow<String?>(null)
     val refreshingOne: StateFlow<String?> = _refreshingOne
+
+    private val _typeTheme = MutableStateFlow(TypeTheme.of(prefs.getString("theme", null)))
+    /** Gewählte Farbwelt (Klassik, Feuer, Wasser, …). */
+    val typeTheme: StateFlow<TypeTheme> = _typeTheme
+
+    fun setTypeTheme(theme: TypeTheme) {
+        _typeTheme.value = theme
+        prefs.edit().putString("theme", theme.key).apply()
+    }
 
     private val _lang = MutableStateFlow(prefs.getString("lang", "de") ?: "de")
     /** Sprache der Karten, in der zuerst gesucht wird ("de" oder "en"). */

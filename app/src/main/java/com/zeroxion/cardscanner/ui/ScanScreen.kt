@@ -529,6 +529,7 @@ private fun CameraPreview(
 /** Abgedunkelter Rand mit einem Ausschnitt im Kartenformat (63 × 88). */
 @Composable
 private fun FrameOverlay(topReserved: Float, bottomReserved: Float) {
+    val frameColor = Gold
     Canvas(
         Modifier
             .fillMaxSize()
@@ -545,7 +546,7 @@ private fun FrameOverlay(topReserved: Float, bottomReserved: Float) {
             blendMode = BlendMode.Clear,
         )
         drawRoundRect(
-            color = Gold,
+            color = frameColor,
             topLeft = Offset(box.left, box.top),
             size = Size(box.width, box.height),
             cornerRadius = radius,

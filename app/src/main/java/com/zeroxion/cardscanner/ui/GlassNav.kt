@@ -84,7 +84,7 @@ private fun NavPill(entry: NavEntry, selected: Boolean, onClick: () -> Unit, mod
             .clip(shape)
             .then(
                 if (selected) {
-                    Modifier.background(Brush.verticalGradient(listOf(Color(0xFFFFE27A), Electric)), shape)
+                    Modifier.background(AccentBrush, shape)
                 } else {
                     Modifier
                 },

@@ -54,8 +54,10 @@ class MainActivity : ComponentActivity() {
         )
         super.onCreate(savedInstanceState)
         setContent {
-            CardscannerTheme {
-                CardscannerApp()
+            val vm: MainViewModel = viewModel()
+            val theme by vm.typeTheme.collectAsStateWithLifecycle()
+            CardscannerTheme(theme) {
+                CardscannerApp(vm)
             }
         }
     }

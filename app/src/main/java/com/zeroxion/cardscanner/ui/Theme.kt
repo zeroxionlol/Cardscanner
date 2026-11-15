@@ -21,6 +21,10 @@ import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -39,25 +43,99 @@ import dev.chrisbanes.haze.HazeTint
 
 // ---------------------------------------------------------------- Farben der Energie-Typen
 
-/** Elektro – Hauptfarbe für Knöpfe, Preise und den Scan-Rahmen. */
-val Electric = Color(0xFFFFD23F)
 val Fire = Color(0xFFFF5D5D)
 val Water = Color(0xFF4DA3FF)
 val Grass = Color(0xFF4ADE80)
 val Psychic = Color(0xFFC084FC)
 
-val Gold = Electric
-val Violet = Psychic
-val Mint = Grass
 val Night = Color(0xFF060918)
 
-/** Dunkle Schrift auf Elektro-gelben Flächen (Nachtblau statt Schwarz). */
+/** Dunkle Schrift auf farbigen Akzentflächen (Nachtblau statt Schwarz). */
 val Ink = Color(0xFF0C1235)
 
-/** Wert-Kachel: Feuer-Rot über Psycho-Magenta zu Wasser-Indigo. */
-val HeroBrush = Brush.linearGradient(
-    listOf(Color(0xFFE63946), Color(0xFFB5179E), Color(0xFF4F46E5)),
-)
+/**
+ * Farbwelten zum Umschalten. Jede hat eine Akzentfarbe (Knöpfe, Preise, Scan-Rahmen),
+ * einen Verlauf für die Wert-Kachel und eigene Farbflecken im Hintergrund.
+ */
+enum class TypeTheme(
+    val key: String,
+    val label: String,
+    val accent: Color,
+    val accentLight: Color,
+    val hero: List<Color>,
+    val glows: List<Color>,
+    val backgroundTop: Color,
+) {
+    CLASSIC(
+        "classic", "Klassik",
+        accent = Color(0xFFFFD23F), accentLight = Color(0xFFFFE27A),
+        hero = listOf(Color(0xFFE63946), Color(0xFFB5179E), Color(0xFF4F46E5)),
+        glows = listOf(Fire, Water, Psychic, Color(0xFFFFD23F)),
+        backgroundTop = Color(0xFF0C1235),
+    ),
+    FIRE(
+        "fire", "Feuer",
+        accent = Color(0xFFFF8A4C), accentLight = Color(0xFFFFB98F),
+        hero = listOf(Color(0xFFB91C3C), Color(0xFFE5482F), Color(0xFFF07A22)),
+        glows = listOf(Color(0xFFFF4D4D), Color(0xFFFF8A3D), Color(0xFFE11D74), Color(0xFFFFC23D)),
+        backgroundTop = Color(0xFF2A0D16),
+    ),
+    WATER(
+        "water", "Wasser",
+        accent = Color(0xFF5CB2FF), accentLight = Color(0xFFA6D4FF),
+        hero = listOf(Color(0xFF0284C7), Color(0xFF2563EB), Color(0xFF4338CA)),
+        glows = listOf(Color(0xFF3B82F6), Color(0xFF22D3EE), Color(0xFF6366F1), Color(0xFF2DD4BF)),
+        backgroundTop = Color(0xFF0A1A3D),
+    ),
+    GRASS(
+        "grass", "Pflanze",
+        accent = Color(0xFF5BE38E), accentLight = Color(0xFFA7F3C0),
+        hero = listOf(Color(0xFF15803D), Color(0xFF059669), Color(0xFF0F766E)),
+        glows = listOf(Color(0xFF22C55E), Color(0xFFA3E635), Color(0xFF14B8A6), Color(0xFFFACC15)),
+        backgroundTop = Color(0xFF082419),
+    ),
+    ELECTRIC(
+        "electric", "Elektro",
+        accent = Color(0xFFFFD23F), accentLight = Color(0xFFFFE89A),
+        hero = listOf(Color(0xFFCA8A04), Color(0xFFD97706), Color(0xFFC2410C)),
+        glows = listOf(Color(0xFFFFD23F), Color(0xFFF59E0B), Color(0xFFFDE047), Color(0xFF60A5FA)),
+        backgroundTop = Color(0xFF231B05),
+    ),
+    PSYCHIC(
+        "psychic", "Psycho",
+        accent = Color(0xFFEE8CFA), accentLight = Color(0xFFF7C5FD),
+        hero = listOf(Color(0xFFC026D3), Color(0xFF9333EA), Color(0xFF4F46E5)),
+        glows = listOf(Color(0xFFD946EF), Color(0xFF8B5CF6), Color(0xFFF472B6), Color(0xFF6366F1)),
+        backgroundTop = Color(0xFF1D0B33),
+    ),
+    ;
+
+    val heroBrush: Brush get() = Brush.linearGradient(hero)
+    val accentBrush: Brush get() = Brush.verticalGradient(listOf(accentLight, accent))
+
+    companion object {
+        fun of(key: String?): TypeTheme = entries.firstOrNull { it.key == key } ?: CLASSIC
+    }
+}
+
+val LocalTypeTheme = staticCompositionLocalOf { TypeTheme.CLASSIC }
+
+/** Akzentfarbe der gewählten Farbwelt (Knöpfe, Preise, Scan-Rahmen). */
+val Gold: Color
+    @Composable @ReadOnlyComposable get() = LocalTypeTheme.current.accent
+val Electric: Color
+    @Composable @ReadOnlyComposable get() = LocalTypeTheme.current.accent
+
+/** Verlauf von Akzent-hell nach Akzent – für Pillen und den aktiven Tab. */
+val AccentBrush: Brush
+    @Composable @ReadOnlyComposable get() = LocalTypeTheme.current.accentBrush
+
+/** Verlauf der Wert-Kachel in der gewählten Farbwelt. */
+val HeroBrush: Brush
+    @Composable @ReadOnlyComposable get() = LocalTypeTheme.current.heroBrush
+
+val Violet = Psychic
+val Mint = Grass
 
 private val typeBrushes = listOf(
     Brush.linearGradient(listOf(Color(0xFFFF8A4C), Color(0xFFE63946))), // Feuer
@@ -137,13 +215,15 @@ fun Modifier.holoShimmer(): Modifier {
 /** Dunkler Hintergrund mit weichen Energie-Farbflecken – darüber liegen die Glasflächen. */
 @Composable
 fun AppBackground(modifier: Modifier = Modifier) {
+    val theme = LocalTypeTheme.current
     Canvas(modifier.fillMaxSize()) {
-        drawRect(Brush.verticalGradient(listOf(Color(0xFF0C1235), Night, Color(0xFF070A1C))))
+        drawRect(Brush.verticalGradient(listOf(theme.backgroundTop, Night, Color(0xFF070A1C))))
         val r = maxOf(size.width, size.height) * 0.55f
-        glow(Fire, Offset(size.width * -0.05f, size.height * 0.04f), r, 0.34f)
-        glow(Water, Offset(size.width * 1.05f, size.height * 0.30f), r, 0.28f)
-        glow(Psychic, Offset(size.width * 0.05f, size.height * 0.72f), r * 0.9f, 0.22f)
-        glow(Electric, Offset(size.width * 0.95f, size.height * 1.02f), r * 0.8f, 0.18f)
+        val (a, b, c, d) = theme.glows
+        glow(a, Offset(size.width * -0.05f, size.height * 0.04f), r, 0.34f)
+        glow(b, Offset(size.width * 1.05f, size.height * 0.30f), r, 0.28f)
+        glow(c, Offset(size.width * 0.05f, size.height * 0.72f), r * 0.9f, 0.22f)
+        glow(d, Offset(size.width * 0.95f, size.height * 1.02f), r * 0.8f, 0.18f)
     }
 }
 
@@ -184,7 +264,7 @@ fun glassChipBorder(selected: Boolean) = FilterChipDefaults.filterChipBorder(
 // ---------------------------------------------------------------- Theme
 
 private val Scheme = darkColorScheme(
-    primary = Electric,
+    primary = TypeTheme.CLASSIC.accent,
     onPrimary = Ink,
     primaryContainer = Color(0xFF3A2F00),
     onPrimaryContainer = Color(0xFFFFE58A),
@@ -226,9 +306,21 @@ private val AppTypography = Typography(
 )
 
 @Composable
-fun CardscannerTheme(content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = Scheme, typography = AppTypography) {
+fun CardscannerTheme(theme: TypeTheme = TypeTheme.CLASSIC, content: @Composable () -> Unit) {
+    val scheme = remember(theme) {
+        Scheme.copy(
+            primary = theme.accent,
+            onPrimary = Ink,
+            primaryContainer = theme.accent.copy(alpha = 0.22f).compositeOver(Night),
+            onPrimaryContainer = theme.accentLight,
+        )
+    }
+    MaterialTheme(colorScheme = scheme, typography = AppTypography) {
         // Helle Grundschrift überall – auch in Flächen ohne eigene Hintergrundfarbe.
-        CompositionLocalProvider(LocalContentColor provides Scheme.onBackground, content = content)
+        CompositionLocalProvider(
+            LocalContentColor provides Scheme.onBackground,
+            LocalTypeTheme provides theme,
+            content = content,
+        )
     }
 }
