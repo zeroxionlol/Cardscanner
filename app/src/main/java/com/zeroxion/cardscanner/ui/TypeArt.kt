@@ -211,15 +211,25 @@ private fun DrawScope.drawWater(t: Float, u: Float) {
         size = Size(92f * u, 18f * u),
         style = Stroke(2f * u),
     )
-    val drops = listOf(-62f to 1.0f, -32f to 1.25f, 0f to 1.45f, 32f to 1.2f, 62f to 0.95f)
+    // Aufspritzende Wassersäule in der Mitte
+    val column = Path().apply {
+        moveTo(center.x - 14f * u, center.y + 27f * u)
+        cubicTo(center.x - 8f * u, center.y + 8f * u, center.x - 5f * u, center.y - 4f * u + bob, center.x, center.y - 10f * u + bob)
+        cubicTo(center.x + 5f * u, center.y - 4f * u + bob, center.x + 8f * u, center.y + 8f * u, center.x + 14f * u, center.y + 27f * u)
+        close()
+    }
+    drawPath(column, Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.5f), light.copy(alpha = 0.2f)), center.y - 10f * u, center.y + 27f * u))
+    drawCircle(Color.White.copy(alpha = 0.55f), 5f * u, Offset(center.x, center.y - 22f * u + bob * 1.5f))
+        val drops = listOf(-62f to 1.0f, -32f to 1.25f, 0f to 1.45f, 32f to 1.2f, 62f to 0.95f)
     drops.forEachIndexed { i, (angle, reach) ->
         val rad = Math.toRadians(angle.toDouble() - 90).toFloat()
         val dist = (34f + reach * 18f) * u + if (i % 2 == 0) bob else -bob
         val pos = Offset(center.x + cos(rad) * dist, center.y + 22f * u + sin(rad) * dist)
         translate(pos.x, pos.y) {
-            rotate(angle, pivot = Offset.Zero) {
+            // Spitze zeigt zur Aufprallstelle – der Tropfen fliegt von ihr weg.
+            rotate(angle + 180f, pivot = Offset.Zero) {
                 val s = (5f + reach * 3f) * u
-                drawPath(dropPath(s), Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.55f), light.copy(alpha = 0.35f)), -s * 1.7f, s))
+                drawPath(dropPath(s), Brush.verticalGradient(listOf(light.copy(alpha = 0.35f), Color.White.copy(alpha = 0.6f)), -s * 1.7f, s))
             }
         }
     }
