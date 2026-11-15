@@ -135,4 +135,13 @@ class LiveApiTest {
         assertTrue(digital.contains("a1"))
         assertTrue(hyphenNoTotal.none { it.setId.lowercase() in digital })
     }
+
+    @Test
+    fun pullRateOfPrismaticSir() {
+        val rate = TcgDexApi.pullRate("sv08.5", "sv08.5-161")
+        println("LIVE pull rate sv08.5-161: $rate")
+        assertNotNull(rate)
+        assertEquals(32, rate!!.sameRarity)
+        assertEquals(1440L, rate.packs)
+    }
 }

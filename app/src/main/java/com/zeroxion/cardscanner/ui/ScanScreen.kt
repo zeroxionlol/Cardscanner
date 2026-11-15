@@ -704,6 +704,9 @@ private fun ResultPane(vm: MainViewModel, state: ScanState.Result, padding: Padd
                         updated = formatIsoDay(selected.priceUpdated),
                     )
                 }
+                item(key = "pull-${selected.id}") {
+                    PullRatePanel(vm = vm, card = selected)
+                }
                 if (selected.hasNormal && selected.hasHolo) {
                     item {
                         Row(

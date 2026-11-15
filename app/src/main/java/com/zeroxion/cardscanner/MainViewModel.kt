@@ -10,8 +10,10 @@ import com.zeroxion.cardscanner.data.BinderLayout
 import com.zeroxion.cardscanner.data.CardBrief
 import com.zeroxion.cardscanner.data.CardGroup
 import com.zeroxion.cardscanner.data.CardInfo
+import com.zeroxion.cardscanner.data.PullRate
 import com.zeroxion.cardscanner.data.CollectionItem
 import com.zeroxion.cardscanner.data.CollectionStore
+import com.zeroxion.cardscanner.data.PullRates
 import com.zeroxion.cardscanner.data.ScanLangs
 import com.zeroxion.cardscanner.data.TcgDexApi
 import com.zeroxion.cardscanner.scan.CardMatcher
@@ -50,6 +52,12 @@ sealed interface ScanState {
         val searchResults: List<CardBrief> = emptyList(),
         val searching: Boolean = false,
     ) : ScanState
+}
+
+sealed interface PullRateState {
+    data object Loading : PullRateState
+    data object None : PullRateState
+    data class Ready(val rate: PullRate) : PullRateState
 }
 
 data class RefreshState(
@@ -121,6 +129,33 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** Karte einer Kategorie zuordnen (null = keine). */
     fun setGroup(uid: String, groupId: String?) {
         viewModelScope.launch { store.update(uid) { it.copy(groupId = groupId) } }
+    }
+
+    // ---------- Pullrate ----------
+
+    private val _pullRates = MutableStateFlow<Map<String, PullRateState>>(emptyMap())
+    /** Pullraten je Karten-ID (werden beim Ansehen einer Karte geladen). */
+    val pullRates: StateFlow<Map<String, PullRateState>> = _pullRates
+
+    /** Pullrate für [card] laden, falls noch nicht geschehen. */
+    fun ensurePullRate(card: CardInfo) {
+        val key = card.id
+        if (_pullRates.value.containsKey(key)) return
+        if (ScanLangs.isAsian(card.lang) || !PullRates.supports(card.setId)) {
+            _pullRates.value = _pullRates.value + (key to PullRateState.None)
+            return
+        }
+        _pullRates.value = _pullRates.value + (key to PullRateState.Loading)
+        viewModelScope.launch {
+            val result = runCatching { withContext(Dispatchers.IO) { TcgDexApi.pullRate(card.setId, card.id) } }
+            _pullRates.value = if (result.isFailure) {
+                // Ohne Verbindung beim nächsten Öffnen erneut versuchen.
+                _pullRates.value - key
+            } else {
+                val rate = result.getOrNull()
+                _pullRates.value + (key to (if (rate != null) PullRateState.Ready(rate) else PullRateState.None))
+            }
+        }
     }
 
     // ---------- Binder ----------

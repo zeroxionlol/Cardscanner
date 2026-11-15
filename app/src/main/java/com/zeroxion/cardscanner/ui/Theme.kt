@@ -12,6 +12,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.SelectableChipColors
@@ -19,6 +20,7 @@ import androidx.compose.material3.TextFieldColors
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -48,6 +50,9 @@ val Gold = Electric
 val Violet = Psychic
 val Mint = Grass
 val Night = Color(0xFF060918)
+
+/** Dunkle Schrift auf Elektro-gelben Flächen (Nachtblau statt Schwarz). */
+val Ink = Color(0xFF0C1235)
 
 /** Wert-Kachel: Feuer-Rot über Psycho-Magenta zu Wasser-Indigo. */
 val HeroBrush = Brush.linearGradient(
@@ -165,7 +170,7 @@ fun glassChipColors(): SelectableChipColors = FilterChipDefaults.filterChipColor
     containerColor = Color.White.copy(alpha = 0.07f),
     labelColor = MaterialTheme.colorScheme.onSurface,
     selectedContainerColor = Electric,
-    selectedLabelColor = Color(0xFF231A00),
+    selectedLabelColor = Ink,
 )
 
 @Composable
@@ -180,7 +185,7 @@ fun glassChipBorder(selected: Boolean) = FilterChipDefaults.filterChipBorder(
 
 private val Scheme = darkColorScheme(
     primary = Electric,
-    onPrimary = Color(0xFF231A00),
+    onPrimary = Ink,
     primaryContainer = Color(0xFF3A2F00),
     onPrimaryContainer = Color(0xFFFFE58A),
     secondary = Water,
@@ -222,5 +227,8 @@ private val AppTypography = Typography(
 
 @Composable
 fun CardscannerTheme(content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = Scheme, typography = AppTypography, content = content)
+    MaterialTheme(colorScheme = Scheme, typography = AppTypography) {
+        // Helle Grundschrift überall – auch in Flächen ohne eigene Hintergrundfarbe.
+        CompositionLocalProvider(LocalContentColor provides Scheme.onBackground, content = content)
+    }
 }

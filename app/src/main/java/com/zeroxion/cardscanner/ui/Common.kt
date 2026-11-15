@@ -118,7 +118,7 @@ fun CardArt(
 fun PricePill(text: String, modifier: Modifier = Modifier) {
     Text(
         text = text,
-        color = Color(0xFF231A00),
+        color = Ink,
         fontWeight = FontWeight.Bold,
         style = MaterialTheme.typography.labelLarge,
         modifier = modifier

@@ -120,6 +120,34 @@ object TcgDexApi {
         return parseBriefs(JSONObject(body).optJSONArray("cards"))
     }
 
+    private val rarityCounts = java.util.concurrent.ConcurrentHashMap<String, Int>()
+
+    /** Seltenheit einer Karte in der englischen Datenbank (einheitliche Bezeichnungen). */
+    fun englishRarity(cardId: String): String? {
+        val body = httpGet("$BASE/en/cards/${enc(cardId)}") ?: return null
+        val o = JSONObject(body)
+        if (!o.str("id").equals(cardId, ignoreCase = true)) return null
+        return o.str("rarity")
+    }
+
+    /** Wie viele Karten eines Sets diese Seltenheit haben (englische Bezeichnung). */
+    fun rarityCount(setId: String, rarity: String): Int {
+        val key = "$setId|$rarity"
+        rarityCounts[key]?.let { return it }
+        val body = httpGet("$BASE/en/cards?set.id=eq:${enc(setId)}&rarity=eq:${enc(rarity)}") ?: return 0
+        val count = JSONArray(body).length()
+        rarityCounts[key] = count
+        return count
+    }
+
+    /** Geschätzte Pullrate einer Karte, oder null, wenn es keine Daten dafür gibt. */
+    fun pullRate(setId: String, cardId: String): PullRate? {
+        if (!PullRates.supports(setId)) return null
+        val rarity = englishRarity(cardId) ?: return null
+        if (PullRates.packsPerHit(setId, rarity) == null) return null
+        return PullRates.estimate(setId, rarity, rarityCount(setId, rarity))
+    }
+
     /** Namenssuche (enthält, Groß-/Kleinschreibung egal). */
     fun searchByName(lang: String, name: String): List<CardBrief> {
         val body = httpGet("$BASE/$lang/cards?name=${enc(name)}") ?: return emptyList()

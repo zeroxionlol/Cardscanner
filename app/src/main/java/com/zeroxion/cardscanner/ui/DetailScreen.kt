@@ -25,6 +25,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Casino
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Remove
@@ -54,6 +55,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.zeroxion.cardscanner.MainViewModel
+import com.zeroxion.cardscanner.PullRateState
 import com.zeroxion.cardscanner.data.CardInfo
 import com.zeroxion.cardscanner.data.CollectionItem
 import com.zeroxion.cardscanner.data.Prices
@@ -177,6 +179,8 @@ fun DetailScreen(
 
             Spacer(Modifier.height(18.dp))
             PricePanel(prices = prices, updated = formatIsoDay(card.priceUpdated))
+            Spacer(Modifier.height(10.dp))
+            PullRatePanel(vm = vm, card = card)
 
             if (card.hasNormal && card.hasHolo) {
                 Spacer(Modifier.height(14.dp))
@@ -396,5 +400,67 @@ private fun PriceStat(label: String, value: Double?, modifier: Modifier = Modifi
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
+    }
+}
+
+private val packFormat: java.text.NumberFormat = java.text.NumberFormat.getIntegerInstance(java.util.Locale.GERMANY)
+
+/**
+ * Geschätzte Pullrate: in wie vielen Boostern man diese Karte im Schnitt zieht.
+ * Lädt die Daten beim ersten Anzeigen; ohne Daten (alte Sets, Promos, asiatische Karten) bleibt sie leer.
+ */
+@Composable
+fun PullRatePanel(vm: MainViewModel, card: CardInfo, modifier: Modifier = Modifier) {
+    val rates by vm.pullRates.collectAsStateWithLifecycle()
+    androidx.compose.runtime.LaunchedEffect(card.id) { vm.ensurePullRate(card) }
+    val state = rates[card.id]
+    if (state == null || state is PullRateState.None) return
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .glass(RoundedCornerShape(22.dp))
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier
+                .size(40.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(typeBrushFor("psychic-pull")),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(Icons.Rounded.Casino, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
+        }
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                "PULLRATE",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            when (state) {
+                is PullRateState.Ready -> {
+                    Text(
+                        "≈ 1 in ${packFormat.format(state.rate.packs)} Boostern",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        listOfNotNull(
+                            card.rarity,
+                            "${state.rate.sameRarity} Karten dieser Seltenheit im Set",
+                        ).joinToString(" · "),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                else -> Text(
+                    "Wird berechnet …",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
     }
 }

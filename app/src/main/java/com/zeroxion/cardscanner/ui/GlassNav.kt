@@ -74,7 +74,7 @@ fun GlassNavBar(
 @Composable
 private fun NavPill(entry: NavEntry, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val content by animateColorAsState(
-        if (selected) Color(0xFF231A00) else Color.White.copy(alpha = 0.72f),
+        if (selected) Ink else Color.White.copy(alpha = 0.72f),
         label = "navContent",
     )
     val shape = RoundedCornerShape(24.dp)

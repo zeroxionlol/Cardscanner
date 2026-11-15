@@ -108,6 +108,8 @@ fun CardscannerApp(vm: MainViewModel = viewModel()) {
 
     Scaffold(
         containerColor = Color.Transparent,
+        // Ohne feste Schriftfarbe wäre Text auf dem durchsichtigen Hintergrund schwarz.
+        contentColor = MaterialTheme.colorScheme.onBackground,
         snackbarHost = {
             SnackbarHost(snackbar) { data ->
                 Snackbar(

@@ -1,5 +1,6 @@
 package com.zeroxion.cardscanner.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -400,9 +401,10 @@ private fun ValueHero(
                 enabled = refresh.total >= 0 && count > 0,
                 shape = RoundedCornerShape(50),
                 contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.45f)),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = Color.White,
-                    contentColor = Color(0xFF1B1F3B),
+                    containerColor = Color.White.copy(alpha = 0.18f),
+                    contentColor = Color.White,
                     disabledContainerColor = Color.White.copy(alpha = 0.25f),
                     disabledContentColor = Color.White.copy(alpha = 0.7f),
                 ),
