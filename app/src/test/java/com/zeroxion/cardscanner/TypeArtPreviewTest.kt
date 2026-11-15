@@ -30,12 +30,12 @@ class TypeArtPreviewTest {
     fun render() {
         assumeTrue(System.getenv("PREVIEW") == "1")
         val out = File("build/previews").apply { mkdirs() }
-        val w = 1080
-        val h = 2200
+        val w = 720
+        val h = 1460
         TypeTheme.entries.forEach { theme ->
             listOf(0.1f, 0.37f).forEachIndexed { i, t ->
                 val image = ImageBitmap(w, h)
-                CanvasDrawScope().draw(Density(2.75f), LayoutDirection.Ltr, Canvas(image), Size(w.toFloat(), h.toFloat())) {
+                CanvasDrawScope().draw(Density(1.85f), LayoutDirection.Ltr, Canvas(image), Size(w.toFloat(), h.toFloat())) {
                     drawRect(Brush.verticalGradient(listOf(theme.backgroundTop, Night)))
                     theme.glows.forEachIndexed { g, c ->
                         val center = listOf(Offset(0f, h * 0.04f), Offset(w * 1f, h * 0.3f), Offset(0f, h * 0.72f), Offset(w * 1f, h * 1f))[g]
