@@ -1,6 +1,7 @@
 package com.zeroxion.cardscanner.ui
 
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -51,6 +52,7 @@ fun ThemePickerSheet(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(16.dp))
+            val time = rememberArtTime()
             TypeTheme.entries.chunked(3).forEach { row ->
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -59,6 +61,7 @@ fun ThemePickerSheet(
                     row.forEach { theme ->
                         ThemeTile(
                             theme = theme,
+                            time = { time.value },
                             selected = theme == current,
                             onClick = { onPick(theme) },
                             modifier = Modifier.weight(1f),
@@ -72,7 +75,7 @@ fun ThemePickerSheet(
 }
 
 @Composable
-private fun ThemeTile(theme: TypeTheme, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun ThemeTile(theme: TypeTheme, time: () -> Float, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val shape = RoundedCornerShape(20.dp)
     val ring by animateDpAsState(if (selected) 2.5.dp else 1.dp, label = "themeRing")
     Column(
@@ -87,11 +90,22 @@ private fun ThemeTile(theme: TypeTheme, selected: Boolean, onClick: () -> Unit, 
             .padding(10.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        // Gemalte Motive der Farbwelt, verkleinert und animiert.
+        Canvas(
+            Modifier
+                .fillMaxWidth()
+                .height(84.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(Brush.verticalGradient(listOf(theme.backgroundTop, Night))),
+        ) {
+            drawTypeArt(theme, time(), scale = 0.42f)
+        }
+        Spacer(Modifier.height(8.dp))
         // Mini-Vorschau: Wert-Kachel mit Akzent-Pille.
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(54.dp)
+                .height(36.dp)
                 .clip(RoundedCornerShape(14.dp))
                 .background(theme.heroBrush),
             contentAlignment = Alignment.BottomStart,

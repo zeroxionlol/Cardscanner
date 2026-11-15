@@ -151,7 +151,16 @@ fun Modifier.holoShimmer(): Modifier {
 @Composable
 fun AppBackground(modifier: Modifier = Modifier) {
     val theme = LocalTypeTheme.current
-    Canvas(modifier.fillMaxSize()) {
+    androidx.compose.foundation.layout.Box(modifier.fillMaxSize()) {
+        BackgroundGlows(theme)
+        // Gemalte Motive der Farbwelt (Wellen, Flammen, Blätter …)
+        TypeDecoration(theme)
+    }
+}
+
+@Composable
+private fun BackgroundGlows(theme: TypeTheme) {
+    Canvas(Modifier.fillMaxSize()) {
         drawRect(Brush.verticalGradient(listOf(theme.backgroundTop, Night, Color(0xFF070A1C))))
         val r = maxOf(size.width, size.height) * 0.55f
         val (a, b, c, d) = theme.glows
