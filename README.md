@@ -18,7 +18,8 @@ zeigt den aktuellen Cardmarket-Preis und speichert Foto und Karte in deiner Samm
 - **Cardmarket-Preis** – Preistrend, günstigstes Angebot sowie Durchschnitt über 1, 7 und 30 Tage,
   getrennt für Normal und Holo/Reverse.
 - **Sammlung** – Deine Fotos, Anzahl pro Karte, Gesamtwert, Suche und Sortierung.
-- **Preise aktualisieren** – Ein Button für die ganze Sammlung, einer pro Karte.
+- **Preise aktualisieren** – Ein Button für die ganze Sammlung, einer pro Karte. Im WLAN kommen
+  alle Preise in einem Zug aus dem Preisführer von Cardmarket, unterwegs Karte für Karte über TCGdex.
 - **Kategorien** – Eigene Kategorien (z. B. „Lenas Karten“). Oben in der Kamera wählst du per
   Dropdown, in welche Kategorie die nächsten Scans kommen.
 - **Farbwelten** – Klassik, Feuer, Wasser, Pflanze, Elektro oder Psycho: über das Paletten-Symbol
@@ -30,8 +31,15 @@ zeigt den aktuellen Cardmarket-Preis und speichert Foto und Karte in deiner Samm
 
 ## Woher die Preise kommen
 
-Cardmarket vergibt derzeit keine neuen API-Zugänge. Die App nutzt deshalb die freie
-[TCGdex-API](https://tcgdex.dev), die den täglichen Cardmarket-Preisführer einbindet.
+Cardmarket vergibt derzeit keine neuen API-Zugänge. Die App nutzt deshalb zwei freie Quellen:
+
+- Die [TCGdex-API](https://tcgdex.dev) liefert die Kartendaten (Name, Set, Nummer, Bild) und zu jeder
+  Karte die Cardmarket-Produktnummer samt Preisen.
+- Den öffentlichen Preisführer von Cardmarket, eine täglich erneuerte Datei mit den Preisen aller
+  Pokémon-Produkte. Beim Aktualisieren der Sammlung lädt die App sie im WLAN einmal am Tag (rund 16 MB)
+  und liest daraus die Preise aller Karten, deren Produktnummer bekannt ist. Über Mobilfunk bleibt es
+  bei einzelnen Abfragen an TCGdex; nur wenn TCGdex nicht antwortet, wird die Datei auch dort geladen.
+
 Die Preise sind also Tageswerte von Cardmarket (Euro), keine Live-Angebote.
 
 ## Installieren

@@ -289,6 +289,25 @@ class CollectionStore(context: Context) {
         }
     }
 
+    /**
+     * Preise aus dem Cardmarket-Preisführer übernehmen, zugeordnet über die Produktnummer.
+     * [updated] ist der Stand der Preisliste.
+     */
+    suspend fun applyPrices(prices: Map<Long, CardmarketPriceGuide.Entry>, updated: String?, now: Long) =
+        mutate { list ->
+            list.map { item ->
+                val entry = item.card.idProduct?.let { prices[it] }?.takeIf { it.hasAny } ?: return@map item
+                item.copy(
+                    card = item.card.copy(
+                        normal = entry.normal,
+                        holo = entry.holo,
+                        priceUpdated = updated ?: item.card.priceUpdated,
+                    ),
+                    refreshedAt = now,
+                )
+            }
+        }
+
     private suspend fun mutate(block: (List<CollectionItem>) -> List<CollectionItem>) =
         withContext(Dispatchers.IO) {
             mutex.withLock {

@@ -12,7 +12,8 @@ import kotlinx.coroutines.withContext
 
 /** Sucht zu einem gelesenen Kartentext die passenden Karten in der Datenbank. */
 object CardMatcher {
-    private class Scored(val brief: CardBrief, val score: Int)
+    /** @param lang Sprache der Datenbank, in der die Karte gefunden wurde */
+    private class Scored(val brief: CardBrief, val score: Int, val lang: String)
 
     /** Ab dieser Wertung gilt eine Karte als sicher erkannt; die Namenssuche entfällt dann. */
     private const val CERTAIN = 95
@@ -31,9 +32,14 @@ object CardMatcher {
     /** Beste Treffer zuerst, höchstens acht (plus gestempelte Nachdrucke direkt hinter ihrem Original). */
     suspend fun find(parsed: ParsedCard, lang: String): List<CardInfo> = coroutineScope {
         val scored = LinkedHashMap<String, Scored>()
-        fun offer(brief: CardBrief, score: Int) {
+        fun offer(brief: CardBrief, score: Int, foundIn: String = lang) {
             val old = scored[brief.id]
-            if (old == null || old.score < score) scored[brief.id] = Scored(brief, score)
+            when {
+                old == null || old.score < score ->
+                    scored[brief.id] = Scored(brief, score, if (old?.lang == lang) lang else foundIn)
+                // Gleiche Karte, schwächerer Treffer: merken, dass es sie auch in der gewünschten Sprache gibt.
+                foundIn == lang && old.lang != lang -> scored[brief.id] = Scored(old.brief, old.score, lang)
+            }
         }
 
         val localId = parsed.localId
@@ -46,10 +52,12 @@ object CardMatcher {
          * Karten eines Sets mit der gelesenen Nummer. Neue Promos fehlen in der deutschen oder
          * französischen Datenbank oft noch – dann zählt der englische Eintrag.
          */
-        fun numbered(setId: String, id: String): List<CardBrief> {
+        fun numbered(setId: String, id: String): List<Pair<CardBrief, String>> {
             val local = TcgDexApi.setCards(lang, setId).filter { CardTextParser.sameLocalId(it.localId, id) }
-            if (local.isNotEmpty() || !english) return local
-            return TcgDexApi.setCards("en", setId).filter { CardTextParser.sameLocalId(it.localId, id) }
+            if (local.isNotEmpty() || !english) return local.map { it to lang }
+            return TcgDexApi.setCards("en", setId)
+                .filter { CardTextParser.sameLocalId(it.localId, id) }
+                .map { it to "en" }
         }
 
         // 1) Set-Kürzel + Nummer ("MEP DE 094"): der einzige Weg zu Promos und Energien ohne Setgröße.
@@ -63,7 +71,7 @@ object CardMatcher {
             setIds.take(4)
                 .map { setId -> async(Dispatchers.IO) { numbered(setId, localId) } }
                 .awaitAll().flatten()
-                .forEach { offer(it, CERTAIN + nameBonus(it.name, parsed.names)) }
+                .forEach { (card, foundIn) -> offer(card, CERTAIN + nameBonus(card.name, parsed.names), foundIn) }
         }
 
         // 2) Nummer + Setgröße ("136/189") grenzen das Set meist eindeutig ein.
@@ -78,7 +86,7 @@ object CardMatcher {
             }
             sets.map { set -> async(Dispatchers.IO) { numbered(set.id, localId) } }
                 .awaitAll().flatten()
-                .forEach { offer(it, 80 + nameBonus(it.name, parsed.names)) }
+                .forEach { (card, foundIn) -> offer(card, 80 + nameBonus(card.name, parsed.names), foundIn) }
         }
 
         // 3) Pokédex-Nummer + Kartennummer: unabhängig von Sprache und Schrift des Namens.
@@ -87,7 +95,7 @@ object CardMatcher {
             withContext(Dispatchers.IO) { runCatching { TcgDexApi.searchByDex("en", dexId, localId) }.getOrDefault(emptyList()) }
                 .filter { CardTextParser.sameLocalId(it.localId, localId) }
                 .asReversed()
-                .forEach { offer(it, 70 + nameBonus(it.name, parsed.names)) }
+                .forEach { offer(it, 70 + nameBonus(it.name, parsed.names), "en") }
         }
 
         // 4) Namenssuche, mit der Nummer gegengeprüft.
@@ -104,17 +112,17 @@ object CardMatcher {
                         .filter { CardTextParser.sameLocalId(it.localId, localId) }
                     else -> emptyList()
                 }
-                val hits = local + foreign
+                val hits = local.map { it to lang } + foreign.map { it to "en" }
                 if (hits.isEmpty()) continue
                 // Die API liefert alt → neu; bei gleicher Wertung sollen neuere Karten vorn stehen.
-                for (hit in hits.asReversed()) {
+                for ((hit, foundIn) in hits.asReversed()) {
                     val idMatch = localId != null && CardTextParser.sameLocalId(hit.localId, localId)
                     val base = when {
                         idMatch -> 60
                         localId == null -> 30
                         else -> 5
                     }
-                    offer(hit, base + nameBonus(hit.name, listOf(name)))
+                    offer(hit, base + nameBonus(hit.name, listOf(name)), foundIn)
                 }
                 break
             }
@@ -124,36 +132,39 @@ object CardMatcher {
 
         // 5) Gestempelte Nachdrucke gleichnamiger Karten als Alternative anbieten.
         val reprintOf = LinkedHashMap<String, String>()
-        val reprints = ArrayList<CardBrief>()
+        val reprints = ArrayList<Pair<CardBrief, String>>()
         val originals = ranked.take(3).filter { it.score >= 60 && setIdOf(it.brief.id) !in stampedReprintSets }
         if (originals.isNotEmpty() && !asian) {
             val pool = withContext(Dispatchers.IO) {
                 runCatching {
                     stampedReprintSets.flatMap { setId ->
-                        TcgDexApi.setCards(lang, setId) + if (english) TcgDexApi.setCards("en", setId) else emptyList()
-                    }
+                        TcgDexApi.setCards(lang, setId).map { it to lang } +
+                            if (english) TcgDexApi.setCards("en", setId).map { it to "en" } else emptyList()
+                    }.distinctBy { it.first.id }
                 }.getOrDefault(emptyList())
             }
             for (original in originals) {
                 // Gleicher Name genügt nicht ("Pikachu" gibt es hundertfach): es muss dieselbe Karte sein.
-                val twin = pool.filter { CardTextParser.similarity(it.name, original.brief.name) >= 0.99 }
-                    .distinctBy { it.id }
-                    .firstOrNull { candidate ->
+                val twin = pool.filter { CardTextParser.similarity(it.first.name, original.brief.name) >= 0.99 }
+                    .firstOrNull { (candidate, _) ->
                         withContext(Dispatchers.IO) {
                             runCatching { TcgDexApi.samePrint(candidate.id, original.brief.id) }.getOrDefault(false)
                         }
                     } ?: continue
-                if (reprintOf.putIfAbsent(twin.id, original.brief.id) == null) reprints += twin
+                if (reprintOf.putIfAbsent(twin.first.id, original.brief.id) == null) reprints += twin
             }
         }
 
-        val wanted = ranked.filterNot { it.brief.id in reprintOf }.map { it.brief.id to it.score } +
-            reprints.map { it.id to 0 }
-        val loaded = wanted.map { (id, score) ->
-            async(Dispatchers.IO) {
-                runCatching { TcgDexApi.card(lang, id) }.getOrNull()?.let { it to score }
-            }
-        }.awaitAll().filterNotNull()
+        // Details und Preise laden – in der Sprache, in der die Karte gefunden wurde. Eine Karte,
+        // die es nur englisch gibt, gar nicht erst in der anderen Sprache anfragen.
+        val wanted = ranked.filterNot { it.brief.id in reprintOf }.map { Triple(it.brief.id, it.lang, it.score) } +
+            reprints.map { (brief, foundIn) -> Triple(brief.id, foundIn, 0) }
+        val results = wanted.map { (id, foundIn, score) ->
+            async(Dispatchers.IO) { runCatching { TcgDexApi.card(foundIn, id)?.let { it to score } } }
+        }.awaitAll()
+        val loaded = results.mapNotNull { it.getOrNull() }
+        // Treffer gefunden, aber keiner ließ sich laden: das ist ein Verbindungsfehler, kein "nichts gefunden".
+        if (loaded.isEmpty()) results.firstNotNullOfOrNull { it.exceptionOrNull() }?.let { throw it }
 
         val main = loaded.filterNot { it.first.id in reprintOf }
             .sortedByDescending { (card, score) ->
