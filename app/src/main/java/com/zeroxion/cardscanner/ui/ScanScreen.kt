@@ -856,6 +856,7 @@ private fun readSummary(parsed: ParsedCard): String {
     val name = parsed.names.firstOrNull()?.let { "„$it“" } ?: "kein Name"
     val number = when {
         parsed.localId != null && parsed.setTotal != null -> "Nr. ${parsed.localId}/${parsed.setTotal}"
+        parsed.localId != null && parsed.setCode != null -> "Nr. ${parsed.setCode} ${parsed.localId}"
         parsed.localId != null -> "Nr. ${parsed.localId}"
         else -> "Nummer nicht lesbar"
     }

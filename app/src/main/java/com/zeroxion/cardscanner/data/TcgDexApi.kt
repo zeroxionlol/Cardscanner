@@ -20,7 +20,27 @@ object TcgDexApi {
     @Volatile
     private var setCache: Map<String, List<SetBrief>> = emptyMap()
 
+    /** Fehler, bei dem ein zweiter Versuch lohnt (Server kurz überlastet, Verbindung abgerissen). */
+    private class Transient(message: String, cause: Throwable? = null) : Exception(message, cause)
+
+    /** Pausen vor dem zweiten und dritten Versuch: der Server meldet zeitweise kurz "503". */
+    private val retryPauses = longArrayOf(400, 1200)
+
     private fun httpGet(url: String): String? {
+        var attempt = 0
+        while (true) {
+            try {
+                return fetch(url)
+            } catch (e: Transient) {
+                if (attempt >= retryPauses.size) {
+                    throw ApiException(e.message ?: "Keine Verbindung zur Kartendatenbank", e.cause)
+                }
+                Thread.sleep(retryPauses[attempt++])
+            }
+        }
+    }
+
+    private fun fetch(url: String): String? {
         val conn = URL(url).openConnection() as HttpURLConnection
         try {
             conn.connectTimeout = 15_000
@@ -29,12 +49,15 @@ object TcgDexApi {
             conn.setRequestProperty("User-Agent", "Cardscanner-Android")
             val code = conn.responseCode
             if (code == 404) return null
+            if (code >= 500) throw Transient("Server antwortet mit $code")
             if (code !in 200..299) throw ApiException("Server antwortet mit $code")
             return conn.inputStream.bufferedReader().use { it.readText() }
         } catch (e: ApiException) {
             throw e
+        } catch (e: Transient) {
+            throw e
         } catch (e: Exception) {
-            throw ApiException("Keine Verbindung zur Kartendatenbank", e)
+            throw Transient("Keine Verbindung zur Kartendatenbank", e)
         } finally {
             conn.disconnect()
         }
@@ -114,10 +137,49 @@ object TcgDexApi {
     private fun isPrinted(cardId: String): Boolean =
         cardId.substringBeforeLast('-').lowercase() !in digitalSetIds()
 
+    private val setCardCache = java.util.concurrent.ConcurrentHashMap<String, List<CardBrief>>()
+
     /** Karten eines Sets (Kurzform). Leere Liste, wenn es das Set in der Sprache nicht gibt. */
     fun setCards(lang: String, setId: String): List<CardBrief> {
+        val key = "$lang/$setId"
+        setCardCache[key]?.let { return it }
         val body = httpGet("$BASE/$lang/sets/${enc(setId)}") ?: return emptyList()
-        return parseBriefs(JSONObject(body).optJSONArray("cards"))
+        val cards = parseBriefs(JSONObject(body).optJSONArray("cards"))
+        if (cards.isNotEmpty()) setCardCache[key] = cards
+        return cards
+    }
+
+    private val setCodeCache = java.util.concurrent.ConcurrentHashMap<String, List<String>>()
+
+    /**
+     * Sets zu einem aufgedruckten Kürzel ("MEP" → mep, "SVI" → sv01). Die Kennungen gelten
+     * für alle westlichen Sprachen; ein Kürzel kann zu mehreren Sets gehören.
+     */
+    fun setIdsByCode(code: String): List<String> {
+        val key = code.trim().uppercase()
+        if (key.isEmpty()) return emptyList()
+        setCodeCache[key]?.let { return it }
+        val body = httpGet("$BASE/en/sets?abbreviation.official=eq:${enc(key)}") ?: return emptyList()
+        val array = JSONArray(body)
+        val digital = digitalSetIds()
+        val ids = ArrayList<String>(array.length())
+        for (i in 0 until array.length()) {
+            val id = array.optJSONObject(i)?.str("id") ?: continue
+            if (id.lowercase() !in digital) ids += id
+        }
+        setCodeCache[key] = ids
+        return ids
+    }
+
+    /**
+     * Karten eines Pokémon (Pokédex-Nummer) mit der gesuchten Kartennummer. Die Pokédex-Nummer
+     * ist in jeder Sprache gleich – so findet sich eine Karte auch ohne lesbaren Namen.
+     * Der Server vergleicht nur grob; die Kartennummer wird deshalb vom Aufrufer nachgeprüft.
+     */
+    fun searchByDex(lang: String, dexId: Int, localId: String): List<CardBrief> {
+        val number = localId.trimStart('0').ifEmpty { "0" }
+        val body = httpGet("$BASE/$lang/cards?dexId=eq:$dexId&localId=${enc(number)}") ?: return emptyList()
+        return parseBriefs(JSONArray(body)).filter { isPrinted(it.id) }
     }
 
     private val rarityCounts = java.util.concurrent.ConcurrentHashMap<String, Int>()
@@ -146,6 +208,31 @@ object TcgDexApi {
         val rarity = englishRarity(cardId) ?: return null
         if (PullRates.packsPerHit(setId, rarity) == null) return null
         return PullRates.estimate(setId, rarity, rarityCount(setId, rarity))
+    }
+
+    private val printCache = java.util.concurrent.ConcurrentHashMap<String, String>()
+
+    /** Merkmale des Kartendrucks, die ein Nachdruck vom Original übernimmt: Zeichner, KP, Attacken. */
+    private fun printMarks(cardId: String): String? {
+        printCache[cardId]?.let { return it }
+        val body = httpGet("$BASE/en/cards/${enc(cardId)}") ?: return null
+        val o = JSONObject(body)
+        if (!o.str("id").equals(cardId, ignoreCase = true)) return null
+        val illustrator = o.str("illustrator") ?: return null
+        val attacks = o.optJSONArray("attacks")
+        val names = ArrayList<String>()
+        if (attacks != null) {
+            for (i in 0 until attacks.length()) attacks.optJSONObject(i)?.str("name")?.let { names += it }
+        }
+        val marks = listOf(illustrator, o.str("hp") ?: "", names.joinToString("+")).joinToString("|").lowercase()
+        printCache[cardId] = marks
+        return marks
+    }
+
+    /** Ob zwei Einträge dieselbe Karte zeigen (etwa Original und Jubiläums-Nachdruck). */
+    fun samePrint(cardId: String, otherId: String): Boolean {
+        val marks = printMarks(cardId) ?: return false
+        return marks == printMarks(otherId)
     }
 
     /** Namenssuche (enthält, Groß-/Kleinschreibung egal). */

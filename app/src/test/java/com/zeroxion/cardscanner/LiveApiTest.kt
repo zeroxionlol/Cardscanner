@@ -136,6 +136,67 @@ class LiveApiTest {
         assertTrue(hyphenNoTotal.none { it.setId.lowercase() in digital })
     }
 
+    /** Promos und Energien ohne Setgröße: Set-Kürzel + Nummer, notfalls aus der englischen Datenbank. */
+    @Test
+    fun matcherFindsCardsBySetCode() = runBlocking {
+        assertEquals(listOf("mep"), TcgDexApi.setIdsByCode("MEP"))
+        assertEquals(listOf("sv01"), TcgDexApi.setIdsByCode("svi"))
+        assertTrue(TcgDexApi.setIdsByCode("QQQ").isEmpty())
+
+        // Basis-Metall-Energie "MEE DE 016": der Name allein ("Basis--Energie") sagt nichts über den Typ.
+        val energy = CardMatcher.find(ParsedCard(listOf("Basis- -Energie"), "016", null, "MEE"), "de")
+        println("LIVE setCode energy: ${energy.map { it.id + " " + it.name }}")
+        assertEquals("mee-016", energy.first().id)
+        assertEquals("mee-013", CardMatcher.find(ParsedCard(listOf("Basis- -Energie"), "013", null, "MEE"), "de").first().id)
+
+        // Alola-Kokowei "MEP DE 094": fehlt in der deutschen Datenbank, die englische kennt sie.
+        val promo = CardMatcher.find(ParsedCard(listOf("Alola-Kokowei"), "094", null, "MEP", 103), "de")
+        println("LIVE setCode promo: ${promo.map { it.id + " " + it.name + " " + it.lang }}")
+        assertEquals("mep-094", promo.first().id)
+        assertTrue("Preis fehlt", promo.first().hasNormal || promo.first().hasHolo)
+
+        // Regelzeichen am Kürzel gelesen ("JMEP").
+        val glued = CardMatcher.find(ParsedCard(listOf("Zapdos"), "098", null, "JMEP", 145), "de")
+        println("LIVE setCode glued: ${glued.map { it.id + " " + it.name }}")
+        assertEquals("mep-098", glued.first().id)
+
+        // Kürzel und Setgröße zusammen ("OBF DE 125/197").
+        val both = CardMatcher.find(ParsedCard(listOf("Glurak ex"), "125", 197, "OBF"), "de")
+        assertEquals("sv03-125", both.first().id)
+    }
+
+    /** Kürzel nicht lesbar: Pokédex-Nummer oder Name führen mit der Kartennummer trotzdem zur Karte. */
+    @Test
+    fun matcherFindsPromoWithoutSetCode() = runBlocking {
+        val byDex = CardMatcher.find(ParsedCard(listOf("Alola-Kokowei"), "094", null, null, 103), "de")
+        println("LIVE dex: ${byDex.map { it.id + " " + it.name }}")
+        assertEquals("mep-094", byDex.first().id)
+
+        val unreadableName = CardMatcher.find(ParsedCard(emptyList(), "098", null, null, 145), "de")
+        println("LIVE dex ohne Namen: ${unreadableName.map { it.id + " " + it.name }}")
+        assertEquals("mep-098", unreadableName.first().id)
+
+        // Ohne Pokédex-Nummer: deutscher Name passt, die Nummer gibt es nur englisch.
+        val byName = CardMatcher.find(ParsedCard(listOf("Zapdos"), "098", null), "de")
+        println("LIVE name+nummer: ${byName.map { it.id + " " + it.name }}")
+        assertEquals("mep-098", byName.first().id)
+    }
+
+    /** Jubiläums-Nachdruck mit der Nummer des Originals: beide Karten stehen zur Wahl. */
+    @Test
+    fun matcherOffersStampedReprint() = runBlocking {
+        val mew = CardMatcher.find(ParsedCard(listOf("VMAX Mew VMAX"), "114", 264), "de")
+        println("LIVE reprint: ${mew.map { it.id + " " + it.name + " " + it.setName }}")
+        assertEquals("swsh8-114", mew[0].id)
+        assertEquals("30th-c-026", mew[1].id)
+
+        // Gleicher Name, andere Karte: kein Nachdruck als Vorschlag (die Sammlung enthält ein altes Pikachu).
+        val pikachu = CardMatcher.find(ParsedCard(listOf("Pikachu"), "025", 165), "de")
+        println("LIVE kein reprint: ${pikachu.map { it.id + " " + it.name }}")
+        assertEquals("sv03.5-025", pikachu.first().id)
+        assertTrue(pikachu.none { it.setId == "30th-c" })
+    }
+
     @Test
     fun pullRateOfPrismaticSir() {
         val rate = TcgDexApi.pullRate("sv08.5", "sv08.5-161")

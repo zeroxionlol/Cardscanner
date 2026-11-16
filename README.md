@@ -6,9 +6,15 @@ zeigt den aktuellen Cardmarket-Preis und speichert Foto und Karte in deiner Samm
 ## Funktionen
 
 - **Scannen** – Foto mit der Kamera (oder aus der Galerie). Die Texterkennung läuft direkt
-  auf dem Handy und liest Kartenname und Kartennummer (z. B. `125/197`).
-- **Zuordnung** – Aus Nummer, Setgröße und Name wird die Karte gesucht. Bei mehreren
-  Treffern wählst du aus; findet die App nichts, kannst du nach dem Namen suchen.
+  auf dem Handy und liest Kartenname und Kartennummer – als `125/197` oder, bei Promos und
+  Energien ohne Setgröße, als Set-Kürzel mit Nummer (`MEP DE 094`). Die untersten Kartenzeilen
+  werden dafür vergrößert gelesen, egal wo die Karte im Foto liegt. Bleibt die Nummer auf Holo-
+  und Glitzerkarten unlesbar, folgt ein weiterer Durchgang ohne die Farbreflexe.
+- **Zuordnung** – Aus Nummer, Setgröße oder Set-Kürzel und Name wird die Karte gesucht; die
+  Pokédex-Nummer (`Nr. 0103`) hilft, wenn der Name nicht passt. Fehlt eine neue Karte in der
+  deutschen Datenbank, wird der englische Eintrag genommen. Bei mehreren Treffern wählst du aus
+  (etwa zwischen Original und Jubiläums-Nachdruck mit Stempel); findet die App nichts, kannst du
+  nach dem Namen suchen.
 - **Cardmarket-Preis** – Preistrend, günstigstes Angebot sowie Durchschnitt über 1, 7 und 30 Tage,
   getrennt für Normal und Holo/Reverse.
 - **Sammlung** – Deine Fotos, Anzahl pro Karte, Gesamtwert, Suche und Sortierung.
