@@ -2,6 +2,7 @@ package com.zeroxion.cardscanner
 
 import android.app.Application
 import android.content.Context
+import android.net.ConnectivityManager
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -10,6 +11,7 @@ import com.zeroxion.cardscanner.data.BinderLayout
 import com.zeroxion.cardscanner.data.CardBrief
 import com.zeroxion.cardscanner.data.CardGroup
 import com.zeroxion.cardscanner.data.CardInfo
+import com.zeroxion.cardscanner.data.CardmarketPriceGuide
 import com.zeroxion.cardscanner.data.PullRate
 import com.zeroxion.cardscanner.ui.TypeTheme
 import com.zeroxion.cardscanner.data.CollectionItem
@@ -412,31 +414,79 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { store.remove(uid) }
     }
 
-    /** Preise aller Karten neu von Cardmarket (über TCGdex) holen. */
+    private val priceGuideDir = File(app.cacheDir, "cardmarket")
+
+    /** Ob die Verbindung nach Datenvolumen abgerechnet wird (Mobilfunk); im Zweifel: ja. */
+    private fun meteredNetwork(): Boolean = try {
+        val manager = getApplication<Application>().getSystemService(ConnectivityManager::class.java)
+        manager == null || manager.isActiveNetworkMetered
+    } catch (e: Exception) {
+        true
+    }
+
+    /** Ob der Preisführer ohne Datenvolumen zu haben ist: heute schon geladen oder im WLAN. */
+    private suspend fun priceGuideIsFree(): Boolean =
+        withContext(Dispatchers.IO) { CardmarketPriceGuide.isFresh(priceGuideDir) || !meteredNetwork() }
+
+    /**
+     * Preise aus dem Cardmarket-Preisführer in die Sammlung übernehmen.
+     * Liefert die Karten, für die es dort keinen Preis gab – oder alle, wenn die Liste nicht erreichbar war.
+     */
+    private suspend fun applyPriceGuide(cards: List<CardInfo>): List<CardInfo> {
+        val wanted = cards.mapNotNull { it.idProduct?.takeIf { id -> id > 0 } }.toSet()
+        if (wanted.isEmpty()) return cards
+        val guide = runCatching {
+            withContext(Dispatchers.IO) { CardmarketPriceGuide.load(priceGuideDir, wanted) }
+        }.getOrNull() ?: return cards
+        store.applyPrices(guide.entries, guide.updated, System.currentTimeMillis())
+        return cards.filterNot { it.idProduct in guide.entries }
+    }
+
+    /**
+     * Preise aller Karten neu holen. Im WLAN (oder wenn die Liste heute schon geladen wurde) kommen
+     * sie in einem Zug aus dem Cardmarket-Preisführer; die Datei ist rund 16 MB groß, unterwegs fragt
+     * die App deshalb weiter Karte für Karte bei TCGdex an. Was der eine Weg nicht liefert, übernimmt der andere.
+     */
     fun refreshAll() {
         if (_refresh.value.running) return
-        val keys = store.items.value.map { it.card.id to it.card.lang }.distinct()
-        if (keys.isEmpty()) return
+        val cards = store.items.value.map { it.card }.distinctBy { it.id to it.lang }
+        if (cards.isEmpty()) return
         viewModelScope.launch {
-            _refresh.value = RefreshState(running = true, done = 0, total = keys.size)
-            var failed = 0
-            var done = 0
-            for (chunk in keys.chunked(4)) {
-                val fresh = chunk.map { (id, lang) ->
-                    async(Dispatchers.IO) { runCatching { TcgDexApi.card(lang, id) }.getOrNull() }
+            val total = cards.size
+            _refresh.value = RefreshState(running = true, done = 0, total = total)
+
+            var pending = cards
+            var guideTried = false
+            if (priceGuideIsFree()) {
+                guideTried = true
+                pending = applyPriceGuide(pending)
+                _refresh.value = RefreshState(running = true, done = total - pending.size, total = total)
+            }
+
+            // Karten ohne Produktnummer oder ohne Eintrag in der Liste: einzeln über TCGdex.
+            val unreachable = ArrayList<CardInfo>()
+            var done = total - pending.size
+            for (chunk in pending.chunked(4)) {
+                val fresh = chunk.map { card ->
+                    async(Dispatchers.IO) { card to runCatching { TcgDexApi.card(card.lang, card.id) }.getOrNull() }
                 }.awaitAll()
                 val now = System.currentTimeMillis()
-                for (card in fresh) {
-                    if (card == null) failed++ else store.applyFresh(card, now)
+                for ((card, result) in fresh) {
+                    if (result == null) unreachable += card else store.applyFresh(result, now)
                 }
                 done += chunk.size
-                _refresh.value = RefreshState(running = true, done = done, total = keys.size)
+                _refresh.value = RefreshState(running = true, done = done, total = total)
             }
-            _refresh.value = RefreshState(running = false, done = keys.size, total = keys.size)
+
+            // TCGdex nicht erreichbar: dann die Preisliste auch unterwegs laden.
+            var failed = unreachable.size
+            if (failed > 0 && !guideTried) failed = applyPriceGuide(unreachable).size
+
+            _refresh.value = RefreshState(running = false, done = total, total = total)
             notify(
                 when (failed) {
                     0 -> "Preise aktualisiert."
-                    keys.size -> "Aktualisierung fehlgeschlagen – keine Verbindung?"
+                    total -> "Aktualisierung fehlgeschlagen – keine Verbindung?"
                     else -> "Preise aktualisiert, $failed Karte(n) nicht erreichbar."
                 },
             )
@@ -451,11 +501,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val card = runCatching {
                 withContext(Dispatchers.IO) { TcgDexApi.card(item.card.lang, item.card.id) }
             }.getOrNull()
-            if (card == null) notify("Preis konnte nicht geladen werden.")
-            else {
-                store.applyFresh(card, System.currentTimeMillis())
-                notify("Preis aktualisiert.")
+            val updated = when {
+                card != null -> {
+                    store.applyFresh(card, System.currentTimeMillis())
+                    true
+                }
+                // TCGdex nicht erreichbar: der Preis steht auch im Cardmarket-Preisführer.
+                // Für eine einzelne Karte wird er aber nicht eigens über Mobilfunk geladen.
+                else -> priceGuideIsFree() && applyPriceGuide(listOf(item.card)).isEmpty()
             }
+            notify(if (updated) "Preis aktualisiert." else "Preis konnte nicht geladen werden.")
             _refreshingOne.value = null
         }
     }

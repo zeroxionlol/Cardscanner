@@ -1,6 +1,7 @@
 package com.zeroxion.cardscanner
 
 import com.zeroxion.cardscanner.data.CardInfo
+import com.zeroxion.cardscanner.data.CardmarketPriceGuide
 import com.zeroxion.cardscanner.data.CollectionItem
 import com.zeroxion.cardscanner.data.CollectionStore
 import com.zeroxion.cardscanner.data.Prices
@@ -67,5 +68,36 @@ class CollectionStoreTest {
         again.load()
         assertNull(again.items.value.first { it.uid == "a" }.groupId)
         assertEquals(lena.id, again.items.value.first { it.uid == "b" }.groupId)
+    }
+
+    /** Preise aus dem Cardmarket-Preisführer landen über die Produktnummer bei der richtigen Karte. */
+    @Test
+    fun priceGuideUpdatesCardsByProductNumber() = runBlocking {
+        val store = CollectionStore(RuntimeEnvironment.getApplication())
+        store.load()
+        val known = item("known").let { it.copy(card = it.card.copy(idProduct = 4711L)) }
+        val other = item("other").let { it.copy(card = it.card.copy(id = "sv03-126", idProduct = 4712L)) }
+        val unknown = item("unknown").let { it.copy(card = it.card.copy(id = "sv03-127")) }
+        store.add(known)
+        store.add(other)
+        store.add(unknown)
+
+        val prices = mapOf(
+            4711L to CardmarketPriceGuide.Entry(Prices(trend = 9.5), Prices(trend = 20.0)),
+            // Eintrag ohne Preise: die alten bleiben stehen.
+            4712L to CardmarketPriceGuide.Entry(null, null),
+        )
+        store.applyPrices(prices, "2026-11-16T01:48:57Z", now = 99L)
+
+        val items = store.items.value.associateBy { it.uid }
+        assertEquals(9.5, items.getValue("known").card.normal!!.trend!!, 0.0001)
+        assertEquals(20.0, items.getValue("known").card.holo!!.trend!!, 0.0001)
+        assertEquals("2026-11-16T01:48:57Z", items.getValue("known").card.priceUpdated)
+        assertEquals(99L, items.getValue("known").refreshedAt)
+        for (untouched in listOf("other", "unknown")) {
+            assertEquals(4.02, items.getValue(untouched).card.normal!!.trend!!, 0.0001)
+            assertNull(items.getValue(untouched).card.priceUpdated)
+            assertEquals(1L, items.getValue(untouched).refreshedAt)
+        }
     }
 }

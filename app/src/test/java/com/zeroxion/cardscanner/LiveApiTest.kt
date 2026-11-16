@@ -197,6 +197,36 @@ class LiveApiTest {
         assertTrue(pikachu.none { it.setId == "30th-c" })
     }
 
+    /** Der Cardmarket-Preisführer liefert zu einer Produktnummer aus TCGdex dieselben Preise – direkt und aktueller. */
+    @Test
+    fun cardmarketPriceGuideMatchesTcgDex() {
+        val card = TcgDexApi.card("en", "swsh8-114")!!
+        val product = card.idProduct!!
+        val dir = java.io.File(System.getProperty("java.io.tmpdir"), "cardscanner-guide-${System.nanoTime()}")
+        try {
+            val started = System.currentTimeMillis()
+            val guide = com.zeroxion.cardscanner.data.CardmarketPriceGuide.load(dir, setOf(product, -1L))
+            val entry = guide.entries[product]
+            println("LIVE price guide: stand=${guide.updated} produkt=$product eintrag=$entry tcgdex=${card.normal} dauer=${System.currentTimeMillis() - started}ms")
+            assertNotNull(entry)
+            assertEquals(setOf(product), guide.entries.keys)
+            assertNotNull(java.time.Instant.parse(guide.updated))
+            // Gleiche Quelle, höchstens einen Tag auseinander: der Durchschnitt über 30 Tage weicht kaum ab.
+            val mine = entry!!.normal!!.avg30!!
+            val theirs = card.normal!!.avg30!!
+            assertTrue("avg30 $mine gegen $theirs", Math.abs(mine - theirs) <= theirs * 0.2 + 0.05)
+
+            // Zweiter Aufruf: die Datei liegt bereit und wird nicht noch einmal geladen.
+            assertTrue(com.zeroxion.cardscanner.data.CardmarketPriceGuide.isFresh(dir))
+            val again = System.currentTimeMillis()
+            val cached = com.zeroxion.cardscanner.data.CardmarketPriceGuide.load(dir, setOf(product))
+            println("LIVE price guide aus dem Zwischenspeicher: ${System.currentTimeMillis() - again}ms")
+            assertEquals(entry, cached.entries[product])
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+
     @Test
     fun pullRateOfPrismaticSir() {
         val rate = TcgDexApi.pullRate("sv08.5", "sv08.5-161")

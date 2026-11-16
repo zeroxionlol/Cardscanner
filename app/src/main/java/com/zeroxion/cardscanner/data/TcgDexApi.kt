@@ -23,8 +23,11 @@ object TcgDexApi {
     /** Fehler, bei dem ein zweiter Versuch lohnt (Server kurz überlastet, Verbindung abgerissen). */
     private class Transient(message: String, cause: Throwable? = null) : Exception(message, cause)
 
-    /** Pausen vor dem zweiten und dritten Versuch: der Server meldet zeitweise kurz "503". */
-    private val retryPauses = longArrayOf(400, 1200)
+    /**
+     * Pausen vor den weiteren Versuchen: der Server meldet zeitweise "503", bei vielen Anfragen
+     * in Folge auch ein paar Sekunden lang.
+     */
+    private val retryPauses = longArrayOf(500, 1500, 3000)
 
     private fun httpGet(url: String): String? {
         var attempt = 0
@@ -241,7 +244,8 @@ object TcgDexApi {
         return parseBriefs(JSONArray(body)).filter { isPrinted(it.id) }
     }
 
-    private fun parsePrices(cm: JSONObject, suffix: String): Prices? {
+    /** Preise einer Variante im Cardmarket-Format ("trend", "avg1" … mit [suffix] "-holo" für Holo/Reverse). */
+    internal fun parsePrices(cm: JSONObject, suffix: String): Prices? {
         val p = Prices(
             trend = cm.dbl("trend$suffix"),
             avg = cm.dbl("avg$suffix"),
