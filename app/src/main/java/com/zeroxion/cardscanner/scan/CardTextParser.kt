@@ -1,23 +1,40 @@
 package com.zeroxion.cardscanner.scan
 
-/** Eine erkannte Textzeile mit ihrer vertikalen Lage im Foto (Pixel). */
-data class OcrLine(val text: String, val top: Int, val bottom: Int) {
+/** Eine erkannte Textzeile mit ihrer Lage im Foto (Pixel). Fehlt die waagerechte Lage, sind beide Werte 0. */
+data class OcrLine(
+    val text: String,
+    val top: Int,
+    val bottom: Int,
+    val left: Int = 0,
+    val right: Int = 0,
+) {
     val height: Int get() = bottom - top
     val centerY: Int get() = (top + bottom) / 2
 }
 
-/** Was sich aus dem Kartentext ablesen ließ. */
+/**
+ * Was sich aus dem Kartentext ablesen ließ.
+ *
+ * @param setCode aufgedrucktes Set-Kürzel neben der Nummer ("MEP", "SVI")
+ * @param dexId Pokédex-Nummer aus der Zeile unter dem Bild ("Nr. 0103")
+ */
 data class ParsedCard(
     val names: List<String>,
     val localId: String?,
     val setTotal: Int?,
+    val setCode: String? = null,
+    val dexId: Int? = null,
 ) {
     val isEmpty: Boolean get() = names.isEmpty() && localId == null
+
+    /** Nummer samt Set (über Setgröße oder Kürzel): damit ist die Karte in der Regel eindeutig. */
+    val hasSetNumber: Boolean get() = localId != null && (setTotal != null || setCode != null)
 }
 
 /**
  * Liest aus dem erkannten Text einer Karte den Namen (große Zeile oben)
- * und die Kartennummer (z. B. "136/189" unten).
+ * und die Kartennummer unten – als "136/189" oder, bei Promos und Energien
+ * ohne Setgröße, als Set-Kürzel mit Nummer ("MEP DE 094").
  * Reines Kotlin ohne Android, damit es sich einfach testen lässt.
  */
 object CardTextParser {
@@ -26,8 +43,25 @@ object CardTextParser {
     /** Wie [fraction], aber tolerant gegenüber typischen Lesefehlern (O statt 0, l/I statt 1). */
     private val looseFraction =
         Regex("""(?<![A-Za-z0-9])([0-9OoIl|]{1,3})\s*/\s*([0-9OoIl|]{2,3})(?![A-Za-z0-9])""")
+    /** Promos bis Schwert & Schild: das Kürzel gehört zur Nummer ("SWSH123"). */
     private val promo =
-        Regex("""(?<![A-Z0-9])(SWSH|SVP|SM|XY|BW|HGSS|DP)\s?(\d{1,3})(?![0-9])""")
+        Regex("""(?<![A-Z0-9])(SWSH|SM|XY|BW|HGSS|DP)\s?(\d{1,3})(?![0-9])""")
+    /**
+     * Aufdruck seit Karmesin & Purpur: Set-Kürzel, Sprache, Nummer – "MEP DE 094", "OBF DE 125/197".
+     * Promos und Energien haben keine Setgröße; dort führt nur das Kürzel zum Set.
+     */
+    private val coded = Regex(
+        """(?<![A-Za-z0-9])([A-Z0-9]{2,4})\s*(?:DE|EN|FR|IT|ES|PT)\s*([0-9OoIl|]{1,3})""" +
+            """(?:\s*/\s*[0-9OoIl|]{2,3})?(?![A-Za-z0-9])""",
+    )
+    /** Wie [coded], wenn das winzige Sprachkürzel fehlt oder verlesen wurde ("MEP 094", "MEE oE 016"). */
+    private val codedLoose = Regex(
+        """(?<![A-Za-z0-9])([A-Z][A-Z0-9]{2,3})\s+(?:[A-Za-z0-9]{1,2}\s+)?(\d{3})(?![A-Za-z0-9]|\s*/)""",
+    )
+    /** Allein stehende dreistellige Nummer in der untersten Zeile ("016 Illustr. …"). */
+    private val bareNumber = Regex("""(?<![A-Za-z0-9/.,])(\d{3})(?![A-Za-z0-9/.,%])""")
+    /** Pokédex-Nummer: "Nr. 0103", "NO. 0103", "N° 0103". */
+    private val dexNumber = Regex("""(?i)(?<![A-Za-z])N[ro°º]\s*[.,:]?\s*([0-9O]{3,4})(?![0-9])""")
     private val hitPoints =
         Regex("""(?i)\b(?:KP|HP|PV|PS)\s*\d{2,3}\b|\b\d{2,3}\s*(?:KP|HP|PV|PS)\b""")
     private val stage =
@@ -65,8 +99,13 @@ object CardTextParser {
             usableBottom.sortedByDescending { it.centerY },
             usable.sortedByDescending { it.centerY },
         )
+        val lowerHalf = minTop + span / 2
+        val lastLines = minTop + span * 0.86
         var localId: String? = null
         var total: Int? = null
+        var setCode: String? = null
+
+        // 1) "136/189": Nummer und Setgröße.
         for (source in numberSources) {
             val hit = source.firstNotNullOfOrNull { fraction.find(it.text) } ?: continue
             localId = fixDigits(hit.groupValues[1].uppercase())
@@ -85,15 +124,52 @@ object CardTextParser {
                 break
             }
         }
+
+        // 2) "MEP DE 094": Set-Kürzel mit Nummer. Das Kürzel hilft auch neben einer Setgröße.
+        val codedHit = numberSources.firstNotNullOfOrNull { source ->
+            source.filter { it.centerY > lowerHalf }.firstNotNullOfOrNull { line ->
+                coded.findAll(line.text).firstOrNull { isSetCode(it.groupValues[1]) && it.groupValues[2].any(Char::isDigit) }
+            }
+        }
+        if (codedHit != null) {
+            setCode = codedHit.groupValues[1]
+            if (localId == null) localId = asDigits(codedHit.groupValues[2])
+        }
+
+        // 3) Ältere Promos: "SWSH123".
         if (localId == null) {
             for (source in numberSources) {
                 val hit = source
-                    .filter { it.centerY > minTop + span / 2 }
+                    .filter { it.centerY > lowerHalf }
                     .firstNotNullOfOrNull { promo.find(it.text.uppercase()) } ?: continue
                 localId = hit.groupValues[1] + hit.groupValues[2]
                 break
             }
         }
+
+        // 4) Kürzel und Nummer ohne lesbare Sprache, zuletzt die Nummer allein – nur in den untersten Zeilen.
+        if (localId == null) {
+            val hit = numberSources.firstNotNullOfOrNull { source ->
+                source.filter { it.centerY >= lastLines }.firstNotNullOfOrNull { line ->
+                    codedLoose.findAll(line.text).firstOrNull { isSetCode(it.groupValues[1]) }
+                }
+            }
+            if (hit != null) {
+                setCode = hit.groupValues[1]
+                localId = hit.groupValues[2]
+            }
+        }
+        if (localId == null) {
+            localId = numberSources.firstNotNullOfOrNull { source ->
+                source.filter { it.centerY >= lastLines && '©' !in it.text }
+                    .firstNotNullOfOrNull { bareNumber.find(it.text) }
+            }?.groupValues?.get(1)
+        }
+
+        val dexId = (usable.sortedBy { it.centerY } + usableBottom)
+            .firstNotNullOfOrNull { dexNumber.find(it.text) }
+            ?.let { it.groupValues[1].replace('O', '0', ignoreCase = true).toIntOrNull() }
+            ?.takeIf { it in 1..1999 }
 
         val topZone = usable.filter { it.centerY <= minTop + span * 0.25 }
         val pool = topZone.ifEmpty { usable }
@@ -104,7 +180,22 @@ object CardTextParser {
             .distinct()
             .take(3)
 
-        return ParsedCard(names, localId, total)
+        return ParsedCard(names, localId, total, setCode, dexId)
+    }
+
+    /** Wörter, die wie ein Set-Kürzel aussehen, aber keins sind (KP-Angaben, Regelkästen …). */
+    private val notSetCodes = setOf("KP", "HP", "PV", "PS", "NR", "NO", "GEW", "GX", "EX", "VMAX", "TAG", "TEAM")
+
+    private fun isSetCode(code: String): Boolean =
+        code.any { it.isLetter() } && code !in notSetCodes && promo.matchEntire(code + "1") == null
+
+    /**
+     * Schreibweisen, unter denen ein gelesenes Kürzel in der Datenbank stehen kann. Das Regelzeichen
+     * davor (ein Buchstabe im Kästchen) klebt beim Lesen manchmal am Kürzel: "JMEP" statt "MEP".
+     */
+    fun setCodeCandidates(code: String): List<String> {
+        val upper = code.trim().uppercase()
+        return listOfNotNull(upper, upper.drop(1).takeIf { upper.length == 4 && upper[0].isLetter() })
     }
 
     private fun asDigits(token: String): String =

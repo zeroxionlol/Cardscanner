@@ -16,14 +16,11 @@ import java.io.IOException
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
-/** Erkannter Text: das ganze Foto und zusätzlich der vergrößerte untere Rand. */
+/** Erkannter Text: das ganze Foto und zusätzlich die vergrößert gelesenen untersten Kartenzeilen. */
 data class CardText(val lines: List<OcrLine>, val bottomLines: List<OcrLine>)
 
-/** Texterkennung direkt auf dem Gerät (ML Kit, lateinische Schrift). */
+/** Texterkennung direkt auf dem Gerät (ML Kit). */
 object TextReader {
-    /** Anteil der Bildhöhe, ab dem der untere Rand (Kartennummer) extra gelesen wird. */
-    private const val STRIP_START = 0.80f
-
     suspend fun read(photo: File, script: Script = Script.LATIN): CardText {
         val bitmap = BitmapFactory.decodeFile(photo.path) ?: throw IOException("Foto nicht lesbar")
         // Die Modelle für Japanisch, Koreanisch und Chinesisch lesen lateinische Zeichen und Ziffern mit.
@@ -36,35 +33,62 @@ object TextReader {
         try {
             val lines = recognize(recognizer, bitmap, 0, 1f)
 
-            // Die Kartennummer ist sehr klein gedruckt. Der untere Rand wird deshalb
+            // Die Kartennummer ist sehr klein gedruckt. Die untersten Kartenzeilen werden deshalb
             // vergrößert ein zweites Mal gelesen – das trifft sie deutlich zuverlässiger.
-            var bottom = emptyList<OcrLine>()
-            val stripTop = (bitmap.height * STRIP_START).toInt()
-            val stripHeight = bitmap.height - stripTop
-            if (stripHeight >= 24 && bitmap.width >= 24) {
-                val factor = (3200f / bitmap.width).coerceIn(1f, 3f)
-                val strip = Bitmap.createBitmap(bitmap, 0, stripTop, bitmap.width, stripHeight)
-                val enlarged = if (factor > 1.05f) {
-                    Bitmap.createScaledBitmap(
-                        strip,
-                        (strip.width * factor).toInt(),
-                        (strip.height * factor).toInt(),
-                        true,
-                    )
-                } else strip
-                val usedFactor = enlarged.width.toFloat() / strip.width
-                bottom = try {
-                    recognize(recognizer, enlarged, stripTop, usedFactor)
-                } catch (e: Exception) {
-                    emptyList()
-                }
-                if (enlarged !== strip) enlarged.recycle()
-                if (strip !== bitmap) strip.recycle()
+            // Wo sie liegen, ergibt sich aus dem Text des ersten Durchgangs: die Karte füllt
+            // das Foto nicht immer (Galerie, Toploader, größerer Abstand).
+            val band = TextLayout.bottomBand(lines, bitmap.width, bitmap.height)
+            val factor = TextLayout.zoom(lines, bitmap.width, band.height)
+            var bottom = readBand(recognizer, bitmap, band, factor, holo = false)
+
+            // Auf Holo- und Glitzerkarten verschwindet die Nummer oft im Schimmer. Fehlt sie noch,
+            // wird derselbe Streifen ohne die Farbreflexe und mit gespreiztem Kontrast gelesen.
+            if (!CardTextParser.parse(lines, bottom).hasSetNumber) {
+                bottom = bottom + readBand(recognizer, bitmap, band, factor, holo = true)
             }
             return CardText(lines, bottom)
         } finally {
             recognizer.close()
             bitmap.recycle()
+        }
+    }
+
+    /** Liest einen Streifen des Fotos vergrößert; die Zeilen kommen in Koordinaten des ganzen Fotos zurück. */
+    private suspend fun readBand(
+        recognizer: TextRecognizer,
+        bitmap: Bitmap,
+        band: Band,
+        factor: Float,
+        holo: Boolean,
+    ): List<OcrLine> {
+        if (band.height < 24 || bitmap.width < 24) return emptyList()
+        var strip: Bitmap? = null
+        var enlarged: Bitmap? = null
+        return try {
+            strip = if (holo) {
+                val pixels = IntArray(bitmap.width * band.height)
+                bitmap.getPixels(pixels, 0, bitmap.width, 0, band.top, bitmap.width, band.height)
+                HoloFilter.apply(pixels)
+                Bitmap.createBitmap(pixels, bitmap.width, band.height, Bitmap.Config.ARGB_8888)
+            } else {
+                Bitmap.createBitmap(bitmap, 0, band.top, bitmap.width, band.height)
+            }
+            enlarged = if (factor > 1.05f) {
+                Bitmap.createScaledBitmap(
+                    strip,
+                    (strip.width * factor).toInt(),
+                    (strip.height * factor).toInt(),
+                    true,
+                )
+            } else strip
+            recognize(recognizer, enlarged, band.top, enlarged.width.toFloat() / strip.width)
+        } catch (e: Exception) {
+            emptyList()
+        } catch (e: OutOfMemoryError) {
+            emptyList()
+        } finally {
+            if (enlarged != null && enlarged !== strip) enlarged.recycle()
+            if (strip != null && strip !== bitmap) strip.recycle()
         }
     }
 
@@ -85,6 +109,8 @@ object TextReader {
                                 text = line.text,
                                 top = offsetY + (box.top / factor).toInt(),
                                 bottom = offsetY + (box.bottom / factor).toInt(),
+                                left = (box.left / factor).toInt(),
+                                right = (box.right / factor).toInt(),
                             )
                         }
                     }
